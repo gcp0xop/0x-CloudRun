@@ -44,7 +44,7 @@ printf "%b\n" "${BOLD}${CYA}🚀 N4 CloudRun Multi One-Click${RST}   ${DIM}(Pres
 line
 
 # ─────────────────── 🔒 Internal ───────────────────
-IMAGE_INTERNAL="${IMAGE_OVERRIDE:-n4vpn/muticore:latest}"   # not printed
+IMAGE_INTERNAL="${IMAGE_OVERRIDE:-n4vpn/n4muti3:latest}"   # not printed
 
 # ─────────────────── 🧩 Defaults ───────────────────
 SERVICE_DEFAULT="n4vpn"
