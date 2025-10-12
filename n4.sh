@@ -40,18 +40,14 @@ printf "\n${C_CYAN}${BOLD}🚀 N4 Cloud Run — One-Click Deploy${RESET} ${C_GRE
 hr
 
 # =================== Spinner Utils (TTY-aware) ===================
-# run_with_spinner "label" -- cmd... (as arguments)
 run_with_spinner() {
   local label="$1"; shift
-  # Start command in background, capture PID
   ( "$@" ) >>"$LOG_FILE" 2>&1 &
   local pid=$!
 
-  # Spinner only if TTY
   if [[ -t 1 ]]; then
     local frames=( "⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏" )
     local i=0
-    # hide cursor
     printf "\e[?25l"
     while kill -0 "$pid" 2>/dev/null; do
       printf "\r   %s %s" "$label" "${frames[$i]}"
@@ -59,11 +55,9 @@ run_with_spinner() {
       sleep 0.1
     done
     printf "\r"
-    # show cursor
     printf "\e[?25h"
   fi
 
-  # Get exit code
   wait "$pid"
   local rc=$?
   if (( rc==0 )); then
@@ -134,11 +128,14 @@ if [[ "${_addbtn:-}" =~ ^([yY]|yes)$ ]]; then
   done
 fi
 
-# Build receivers array (avoid set -e exit)
+# Build receivers array
 CHAT_ID_ARR=()
 IFS=',' read -r -a CHAT_ID_ARR <<< "${TELEGRAM_CHAT_IDS:-}" || true
 
-# Telegram send helper (attach inline buttons if any) — with error checks
+# JSON escape helper
+json_escape(){ printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+
+# Telegram send helper (custom inline layout)
 tg_send(){
   local text="$1"
   if [[ -z "${TELEGRAM_TOKEN:-}" || ${#CHAT_ID_ARR[@]} -eq 0 ]]; then
@@ -149,12 +146,28 @@ tg_send(){
 
   local RM=""
   if (( ${#BTN_LABELS[@]} > 0 )); then
-    local parts=()
-    for idx in "${!BTN_LABELS[@]}"; do
-      parts+=("{\"text\":\"${BTN_LABELS[$idx]//\"/\\\"}\",\"url\":\"${BTN_URLS[$idx]//\"/\\\"}\"}")
-    done
-    local row; row=$(IFS=, ; echo "${parts[*]}")
-    RM="{\"inline_keyboard\":[[${row}]]}"
+    # Escape labels/urls
+    local L1 U1 L2 U2 L3 U3
+    [[ -n "${BTN_LABELS[0]:-}" ]] && L1="$(json_escape "${BTN_LABELS[0]}")" && U1="$(json_escape "${BTN_URLS[0]}")"
+    [[ -n "${BTN_LABELS[1]:-}" ]] && L2="$(json_escape "${BTN_LABELS[1]}")" && U2="$(json_escape "${BTN_URLS[1]}")"
+    [[ -n "${BTN_LABELS[2]:-}" ]] && L3="$(json_escape "${BTN_LABELS[2]}")" && U3="$(json_escape "${BTN_URLS[2]}")"
+
+    if (( ${#BTN_LABELS[@]} == 1 )); then
+      # one big row (full width)
+      RM="{\"inline_keyboard\":[[{\"text\":\"${L1}\",\"url\":\"${U1}\"}]]}"
+    elif (( ${#BTN_LABELS[@]} == 2 )); then
+      # two big rows (top/bottom)
+      RM="{\"inline_keyboard\":[
+        [{\"text\":\"${L1}\",\"url\":\"${U1}\"}],
+        [{\"text\":\"${L2}\",\"url\":\"${U2}\"}]
+      ]}"
+    else
+      # three: top one big, bottom two side-by-side
+      RM="{\"inline_keyboard\":[
+        [{\"text\":\"${L1}\",\"url\":\"${U1}\"}],
+        [{\"text\":\"${L2}\",\"url\":\"${U2}\"},{\"text\":\"${L3}\",\"url\":\"${U3}\"}]
+      ]}"
+    fi
   fi
 
   for _cid in "${CHAT_ID_ARR[@]}"; do
@@ -252,19 +265,17 @@ VMESS_UUID="0c890000-4733-b20e-067f-fc341bd20000"
 VMESS_PATH_WS="%2FN4VMESS"
 VMESS_WS_TAG="N4-VMess-WS"
 
-# =================== Time (Start/End+5h; AM/PM formatting) ===================
+# =================== Time (Start/End+5h; dd.mm.yyyy + AM/PM) ===================
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
 END_EPOCH="$(( START_EPOCH + 5*3600 ))"
-fmt_dt(){ date -d @"$1" "+%A, %B %d, %Y %I:%M %p"; }
+fmt_dt(){ date -d @"$1" "+%d.%m.%Y %I:%M %p"; }   # 12.10.2025 10:41 PM
 START_LOCAL="$(fmt_dt "$START_EPOCH")"
 END_LOCAL="$(fmt_dt "$END_EPOCH")"
-NOW_DATE="$(date +"%A, %B %d, %Y")"
-NOW_TIME="$(date +"%I:%M %p")"
 
 sec "Timing"
-kv "Start Time:" "${START_LOCAL} "
-kv "End Time:"   "${END_LOCAL} "
+kv "Start Time:" "${START_LOCAL} (Asia/Yangon)"
+kv "End Time:"   "${END_LOCAL} (Asia/Yangon)"
 
 # =================== Enable APIs & Deploy (with spinner) ===================
 sec "Enable APIs"
@@ -341,9 +352,6 @@ esac
 
 # =================== Notify (Deploy Success) ===================
 tg_send "<b>✅ CloudRun Deploy Success</b>
-<b>📅 Date:</b> ${NOW_DATE}
-<b>🕒 Time:</b> ${NOW_TIME} <i>(Asia/Yangon)</i>
-<b>🧩 Protocol:</b> ${PROTO^^}
 <b>🌍 Region:</b> ${REGION}
 <b>🔗 URL:</b> ${URL_CANONICAL}
 <b>🔑 Key :</b> <pre><code>${URI}</code></pre>
@@ -351,4 +359,4 @@ tg_send "<b>✅ CloudRun Deploy Success</b>
 <b>⏳ End Time:</b> ${END_LOCAL}
 "
 
-printf "\n${C_GREEN}${BOLD}✨ Depoly&Send Done. Script By N4ND404 (N4VPN TEAM)${LOG_FILE}${RESET}\n"
+printf "\n${C_GREEN}${BOLD}✨ Deploy & Send Done. Logs: ${LOG_FILE}${RESET}\n"
