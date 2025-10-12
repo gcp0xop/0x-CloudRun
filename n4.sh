@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# ========== Ensure interactive reads even when run via curl/process substitution ==========
+if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
+  exec </dev/tty
+fi
+
 # =================== Color & UI ===================
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   RESET=$'\e[0m'; BOLD=$'\e[1m'; DIM=$'\e[2m'
@@ -290,4 +295,4 @@ tg_send "<b>✅ Deploy Success</b>
 <b>⏳ Validity:</b> 5 hours (End at: ${END_LOCAL})
 "
 
-printf "\n${C_GREEN}${BOLD}✨ Done. Inline URL buttons (0–3) attached per your inputs. Start message removed; only Deploy Success is sent.${RESET}\n"
+printf "\n${C_GREEN}${BOLD}✨ Done. Prompts are bound to TTY; inline URL buttons (0–3) included; Start message removed.${RESET}\n"
