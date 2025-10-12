@@ -1,10 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ========== Ensure interactive reads even when run via curl/process substitution ==========
+# ===== Ensure interactive reads even when run via curl/process substitution =====
 if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
   exec </dev/tty
 fi
+
+# ===== Logging & error handler =====
+LOG_FILE="/tmp/n4_cloudrun_$(date +%s).log"
+touch "$LOG_FILE"
+on_err() {
+  local rc=$?
+  echo "" | tee -a "$LOG_FILE"
+  echo "✘ ERROR: Command failed (exit $rc) at line $LINENO: ${BASH_COMMAND}" | tee -a "$LOG_FILE" >&2
+  echo "—— LOG (last 80 lines) ——" >&2
+  tail -n 80 "$LOG_FILE" >&2 || true
+  exit $rc
+}
+trap on_err ERR
 
 # =================== Color & UI ===================
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
@@ -16,7 +29,6 @@ if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
 else
   RESET= BOLD= DIM= C_CYAN= C_BLUE= C_GREEN= C_YEL= C_ORG= C_PINK= C_GREY= C_RED=
 fi
-
 hr(){ printf "${C_GREY}%s${RESET}\n" "──────────────────────────────────────────────"; }
 sec(){ printf "\n${C_BLUE}📦 ${BOLD}%s${RESET}\n" "$1"; hr; }
 ok(){ printf "${C_GREEN}✔${RESET} %s\n" "$1"; }
@@ -37,10 +49,17 @@ if [[ ( -z "${TELEGRAM_TOKEN}" || -z "${TELEGRAM_CHAT_IDS}" ) && -f .env ]]; the
 fi
 
 printf "\n${C_PINK}${BOLD}Telegram Setup${RESET}\n"
-echo "   Note: Token input is hidden (no characters will show)."
-read -rsp "   🤖 Telegram Bot Token: " _tk || true; echo
+read -rp "   🤖 Telegram Bot Token (e.g. 123456:ABC...): " _tk || true
 if [[ -n "${_tk:-}" ]]; then TELEGRAM_TOKEN="$_tk"; fi
-[[ -n "${TELEGRAM_TOKEN:-}" ]] && ok "Telegram token captured (hidden)."
+if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then
+  warn "Telegram token empty; you can still deploy, but messages won't be sent."
+else
+  if ! [[ "${TELEGRAM_TOKEN}" =~ ^[0-9]+:[A-Za-z0-9_\-]+$ ]]; then
+    warn "Token format looks unusual. Continue anyway."
+  else
+    ok "Telegram token captured: ${TELEGRAM_TOKEN}"
+  fi
+fi
 
 read -rp "   👤 Owner/Channel Chat ID(s) (comma-separated): " _ids || true
 if [[ -n "${_ids:-}" ]]; then TELEGRAM_CHAT_IDS="${_ids// /}"; fi
@@ -85,11 +104,12 @@ fi
 CHAT_ID_ARR=()
 IFS=',' read -r -a CHAT_ID_ARR <<< "${TELEGRAM_CHAT_IDS:-}" || true
 
-# Telegram send helper (attach inline buttons if any)
+# Telegram send helper (attach inline buttons if any) — with error checks
 tg_send(){
   local text="$1"
   if [[ -z "${TELEGRAM_TOKEN:-}" || ${#CHAT_ID_ARR[@]} -eq 0 ]]; then
     warn "Telegram not configured (skip send)."
+    echo "[tg_send] skipped: token='${TELEGRAM_TOKEN:-empty}' ids='${TELEGRAM_CHAT_IDS:-empty}'" >>"$LOG_FILE"
     return 0
   fi
 
@@ -99,22 +119,28 @@ tg_send(){
     for idx in "${!BTN_LABELS[@]}"; do
       parts+=("{\"text\":\"${BTN_LABELS[$idx]//\"/\\\"}\",\"url\":\"${BTN_URLS[$idx]//\"/\\\"}\"}")
     done
-    local row=$(IFS=, ; echo "${parts[*]}")
+    local row; row=$(IFS=, ; echo "${parts[*]}")
     RM="{\"inline_keyboard\":[[${row}]]}"
   fi
 
   for _cid in "${CHAT_ID_ARR[@]}"; do
     if [[ -n "$RM" ]]; then
-      curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+      RESP=$(curl -s -S -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
         -d "chat_id=${_cid}" \
         --data-urlencode "text=${text}" \
         -d "parse_mode=HTML" \
-        --data-urlencode "reply_markup=${RM}" >/dev/null || true
+        --data-urlencode "reply_markup=${RM}" 2>>"$LOG_FILE" )
     else
-      curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+      RESP=$(curl -s -S -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
         -d "chat_id=${_cid}" \
         --data-urlencode "text=${text}" \
-        -d "parse_mode=HTML" >/dev/null || true
+        -d "parse_mode=HTML" 2>>"$LOG_FILE" )
+    fi
+    echo "[tg_send] response: $RESP" >>"$LOG_FILE"
+    if [[ "$RESP" != *'"ok":true'* ]]; then
+      warn "Telegram send failed for chat_id=${_cid} (see $LOG_FILE)"
+    else
+      ok "Telegram message sent to ${_cid}"
     fi
   done
 }
@@ -127,10 +153,11 @@ if [[ -z "$PROJECT" ]]; then
   echo "👉 gcloud config set project <YOUR_PROJECT_ID>"
   exit 1
 fi
-PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" 2>>"$LOG_FILE" | tee -a "$LOG_FILE" >/dev/null
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" 2>>"$LOG_FILE"
 ok "Loaded Project"
-kv "Project:"       "${BOLD}${PROJECT}${RESET}"
-kv "Project No.:"   "${PROJECT_NUMBER}"
+kv "Project:" "${BOLD}${PROJECT}${RESET}"
+kv "Project No.:" "${PROJECT_NUMBER}"
 
 # =================== Protocol (exactly 4) ===================
 sec "Protocol"
@@ -139,7 +166,6 @@ echo "   2) VLESS WS"
 echo "   3) VLESS gRPC"
 echo "   4) VMess WS"
 read -rp "   Choose [1-4, default 1]: " _opt || true
-
 case "${_opt:-1}" in
   2) PROTO="vless-ws"    ; IMAGE="docker.io/n4vip/vless:latest"        ;;
   3) PROTO="vless-grpc"  ; IMAGE="docker.io/n4vip/vlessgrpc:latest"    ;;
@@ -176,29 +202,24 @@ ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
 SERVICE="${SERVICE:-freen4vpn}"
 TIMEOUT="${TIMEOUT:-3600}"
 PORT="${PORT:-8080}"
-
 read -rp "   Service name [default: ${SERVICE}]: " _svc || true
 SERVICE="${_svc:-$SERVICE}"
 
 # =================== Keys / Tags / Paths ===================
 VLESS_WS_TAG="VLESS WS Protocol"
 VLESS_GRPC_TAG="Vless Grpc"
-
 TROJAN_PASS="Nanda"
 TROJAN_GRPC_SVC="n4trojan-grpc"
 TROJAN_GRPC_TAG="GCP TROJAN gRPC"
-
 VLESS_UUID="0c890000-4733-b20e-067f-fc341bd20000"
 VLESS_PATH_WS="%2FN4VPN"
-
 VLESS_UUID_GRPC="0c890000-4733-b20e-067f-fc341bd20000"
 VLESS_GRPC_SVC="n4vpnfree-grpc"
-
 VMESS_UUID="0c890000-4733-b20e-067f-fc341bd20000"
 VMESS_PATH_WS="%2FN4VMESS"
 VMESS_WS_TAG="N4-VMess-WS"
 
-# =================== Time (Start/End+5h only; no start message) ===================
+# =================== Time (Start/End+5h; no start message) ===================
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
 END_EPOCH="$(( START_EPOCH + 5*3600 ))"
@@ -207,12 +228,12 @@ START_LOCAL="$(fmt "$START_EPOCH")"
 END_LOCAL="$(fmt "$END_EPOCH")"
 
 sec "Timing"
-kv "Start:"      "${START_LOCAL}"
-kv "End(+5h):"   "${END_LOCAL}"
+kv "Start:"    "${START_LOCAL}"
+kv "End(+5h):" "${END_LOCAL}"
 
 # =================== Enable APIs & Deploy ===================
 sec "Enable APIs"
-gcloud services enable run.googleapis.com cloudbuild.googleapis.com --quiet
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com --quiet 2>>"$LOG_FILE" | tee -a "$LOG_FILE" >/dev/null
 ok "APIs Enabled"
 
 sec "Deploying"
@@ -225,11 +246,11 @@ gcloud run deploy "$SERVICE" \
   --timeout="$TIMEOUT" \
   --allow-unauthenticated \
   --port="$PORT" \
-  --quiet
+  --quiet 2>>"$LOG_FILE" | tee -a "$LOG_FILE" >/dev/null
 ok "Deployed Successfully"
 
 # =================== Result ===================
-PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" 2>>"$LOG_FILE"
 CANONICAL_HOST="${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
 URL_CANONICAL="https://${CANONICAL_HOST}"
 
@@ -295,4 +316,4 @@ tg_send "<b>✅ Deploy Success</b>
 <b>⏳ Validity:</b> 5 hours (End at: ${END_LOCAL})
 "
 
-printf "\n${C_GREEN}${BOLD}✨ Done. Prompts are bound to TTY; inline URL buttons (0–3) included; Start message removed.${RESET}\n"
+printf "\n${C_GREEN}${BOLD}✨ Done. If something fails, see the log: ${LOG_FILE}${RESET}\n"
