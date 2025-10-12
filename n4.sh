@@ -32,8 +32,10 @@ if [[ ( -z "${TELEGRAM_TOKEN}" || -z "${TELEGRAM_CHAT_IDS}" ) && -f .env ]]; the
 fi
 
 printf "\n${C_PINK}${BOLD}Telegram Setup${RESET}\n"
+echo "   Note: Token input is hidden (no characters will show)."
 read -rsp "   🤖 Telegram Bot Token: " _tk || true; echo
 if [[ -n "${_tk:-}" ]]; then TELEGRAM_TOKEN="$_tk"; fi
+[[ -n "${TELEGRAM_TOKEN:-}" ]] && ok "Telegram token captured (hidden)."
 
 read -rp "   👤 Owner/Channel Chat ID(s) (comma-separated): " _ids || true
 if [[ -n "${_ids:-}" ]]; then TELEGRAM_CHAT_IDS="${_ids// /}"; fi
@@ -51,12 +53,10 @@ if [[ "${_addbtn:-}" =~ ^([yY]|yes)$ ]]; then
     echo "   —— Button $((i+1)) ——"
     read -rp "   🔖 Button Label [default: ${DEFAULT_LABEL}]: " _lbl || true
     if [[ -z "${_lbl:-}" ]]; then
-      # Use default label + default URL, do not ask URL
       BTN_LABELS+=("${DEFAULT_LABEL}")
       BTN_URLS+=("${DEFAULT_URL}")
       ok "Added: ${DEFAULT_LABEL} → ${DEFAULT_URL}"
     else
-      # Custom label → ask for URL
       while :; do
         read -rp "   🔗 Button URL (http/https): " _url || true
         if [[ -n "${_url:-}" && "${_url}" =~ ^https?:// ]]; then
@@ -69,25 +69,27 @@ if [[ "${_addbtn:-}" =~ ^([yY]|yes)$ ]]; then
         fi
       done
     fi
-
     ((i++))
-    if (( i >= 3 )); then break; fi
+    (( i >= 3 )) && break
     read -rp "   ➕ Add another button? [y/N]: " _more || true
     [[ "${_more:-}" =~ ^([yY]|yes)$ ]] || break
   done
 fi
 
-# Build receivers array
-IFS=',' read -r -a CHAT_ID_ARR <<< "${TELEGRAM_CHAT_IDS:-}"
+# Build receivers array (avoid set -e exit)
+CHAT_ID_ARR=()
+IFS=',' read -r -a CHAT_ID_ARR <<< "${TELEGRAM_CHAT_IDS:-}" || true
 
 # Telegram send helper (attach inline buttons if any)
 tg_send(){
   local text="$1"
-  [[ -z "${TELEGRAM_TOKEN:-}" || ${#CHAT_ID_ARR[@]} -eq 0 ]] && return 0
+  if [[ -z "${TELEGRAM_TOKEN:-}" || ${#CHAT_ID_ARR[@]} -eq 0 ]]; then
+    warn "Telegram not configured (skip send)."
+    return 0
+  fi
 
   local RM=""
   if (( ${#BTN_LABELS[@]} > 0 )); then
-    # Build one-row keyboard with up to 3 buttons
     local parts=()
     for idx in "${!BTN_LABELS[@]}"; do
       parts+=("{\"text\":\"${BTN_LABELS[$idx]//\"/\\\"}\",\"url\":\"${BTN_URLS[$idx]//\"/\\\"}\"}")
