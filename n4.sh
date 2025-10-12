@@ -54,11 +54,7 @@ if [[ -n "${_tk:-}" ]]; then TELEGRAM_TOKEN="$_tk"; fi
 if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then
   warn "Telegram token empty; you can still deploy, but messages won't be sent."
 else
-  if ! [[ "${TELEGRAM_TOKEN}" =~ ^[0-9]+:[A-Za-z0-9_\-]+$ ]]; then
-    warn "Token format looks unusual. Continue anyway."
-  else
-    ok "Telegram token captured: ${TELEGRAM_TOKEN}"
-  fi
+  ok "Telegram token captured: ${TELEGRAM_TOKEN}"
 fi
 
 read -rp "   👤 Owner/Channel Chat ID(s) (comma-separated): " _ids || true
@@ -93,8 +89,9 @@ if [[ "${_addbtn:-}" =~ ^([yY]|yes)$ ]]; then
         fi
       done
     fi
-    ((i++))
-    (( i >= 3 )) && break
+    # safe increment under `set -e`
+    i=$(( i + 1 ))
+    if (( i >= 3 )); then break; fi
     read -rp "   ➕ Add another button? [y/N]: " _more || true
     [[ "${_more:-}" =~ ^([yY]|yes)$ ]] || break
   done
@@ -153,7 +150,6 @@ if [[ -z "$PROJECT" ]]; then
   echo "👉 gcloud config set project <YOUR_PROJECT_ID>"
   exit 1
 fi
-PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" 2>>"$LOG_FILE" | tee -a "$LOG_FILE" >/dev/null
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" 2>>"$LOG_FILE"
 ok "Loaded Project"
 kv "Project:" "${BOLD}${PROJECT}${RESET}"
@@ -316,4 +312,4 @@ tg_send "<b>✅ Deploy Success</b>
 <b>⏳ Validity:</b> 5 hours (End at: ${END_LOCAL})
 "
 
-printf "\n${C_GREEN}${BOLD}✨ Done. If something fails, see the log: ${LOG_FILE}${RESET}\n"
+printf "\n${C_GREEN}${BOLD}✨ Done. Fixed the i++ issue for set -e. If anything else fails, check: ${LOG_FILE}${RESET}\n"
