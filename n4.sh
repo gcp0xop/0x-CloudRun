@@ -223,17 +223,17 @@ VMESS_WS_TAG="N4-VMess-WS"
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
 END_EPOCH="$(( START_EPOCH + 5*3600 ))"
-fmt_dt(){ date -d @"$1" "+%A, %B %d, %Y %I:%M:%S %p"; }   # e.g., Sunday, October 12, 2025 04:21:00 PM
+fmt_dt(){ date -d @"$1" "+%A, %B %d, %Y %I:%M %p"; }   # e.g., Sunday, October 12, 2025 04:21:00 PM
 START_LOCAL="$(fmt_dt "$START_EPOCH")"
 END_LOCAL="$(fmt_dt "$END_EPOCH")"
 
 # Also show current date/time for message header
 NOW_DATE="$(date +"%A, %B %d, %Y")"
-NOW_TIME="$(date +"%I:%M:%S %p")"
+NOW_TIME="$(date +"%I:%M %p")"
 
 sec "Timing"
-kv "Start:"    "${START_LOCAL} (Asia/Yangon)"
-kv "End(+5h):" "${END_LOCAL} (Asia/Yangon)"
+kv "Start Time:"    "${START_LOCAL} "
+kv "End Time:" "${END_LOCAL} "
 
 # =================== Enable APIs & Deploy ===================
 sec "Enable APIs"
@@ -317,8 +317,8 @@ tg_send "<b>✅ Deploy Success</b>
 <b>🌍 Region:</b> ${REGION}
 <b>🔗 URL:</b> ${URL_CANONICAL}
 <b>🔑 Key:</b> <pre><code>${URI}</code></pre>
-<b>🕒 Start Time:</b> ${START_LOCAL} <i>(Asia/Yangon)</i>
-<b>⏳ End (+5h):</b> ${END_LOCAL} <i>(Asia/Yangon)</i>
+<b>🕒 Start Time:</b> ${START_LOCAL}
+<b>⏳ End Time:</b> ${END_LOCAL}
 <b>📆 Validity:</b> 5 hours (Ends at ${END_LOCAL})
 "
 
