@@ -69,9 +69,10 @@ BTN_URLS=()
 read -rp "   ➕ Add URL button(s)? [y/N]: " _addbtn || true
 if [[ "${_addbtn:-}" =~ ^([yY]|yes)$ ]]; then
   i=0
-  while (( i < 3 )); do
+  while true; do
     echo "   —— Button $((i+1)) ——"
     read -rp "   🔖 Button Label [default: ${DEFAULT_LABEL}]: " _lbl || true
+    # ✅ Default label + URL handling
     if [[ -z "${_lbl:-}" ]]; then
       BTN_LABELS+=("${DEFAULT_LABEL}")
       BTN_URLS+=("${DEFAULT_URL}")
@@ -79,7 +80,10 @@ if [[ "${_addbtn:-}" =~ ^([yY]|yes)$ ]]; then
     else
       while :; do
         read -rp "   🔗 Button URL (http/https): " _url || true
-        if [[ -n "${_url:-}" && "${_url}" =~ ^https?:// ]]; then
+        if [[ -z "${_url:-}" ]]; then
+          warn "Empty URL — Skipped this button."
+          break
+        elif [[ "${_url}" =~ ^https?:// ]]; then
           BTN_LABELS+=("${_lbl}")
           BTN_URLS+=("${_url}")
           ok "Added: ${_lbl} → ${_url}"
@@ -89,9 +93,11 @@ if [[ "${_addbtn:-}" =~ ^([yY]|yes)$ ]]; then
         fi
       done
     fi
-    # safe increment under `set -e`
+    # Safe increment (no error even if i unset)
     i=$(( i + 1 ))
+    # Stop if 3 buttons reached
     if (( i >= 3 )); then break; fi
+    # Ask for more
     read -rp "   ➕ Add another button? [y/N]: " _more || true
     [[ "${_more:-}" =~ ^([yY]|yes)$ ]] || break
   done
