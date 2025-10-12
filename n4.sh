@@ -39,6 +39,41 @@ kv(){ printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"; }
 printf "\n${C_CYAN}${BOLD}🚀 N4 Cloud Run — One-Click Deploy${RESET} ${C_GREY}(Trojan gRPC / VLESS WS / VLESS gRPC / VMess WS)${RESET}\n"
 hr
 
+# =================== Spinner Utils (TTY-aware) ===================
+# run_with_spinner "label" -- cmd... (as arguments)
+run_with_spinner() {
+  local label="$1"; shift
+  # Start command in background, capture PID
+  ( "$@" ) >>"$LOG_FILE" 2>&1 &
+  local pid=$!
+
+  # Spinner only if TTY
+  if [[ -t 1 ]]; then
+    local frames=( "⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏" )
+    local i=0
+    # hide cursor
+    printf "\e[?25l"
+    while kill -0 "$pid" 2>/dev/null; do
+      printf "\r   %s %s" "$label" "${frames[$i]}"
+      i=$(( (i+1) % ${#frames[@]} ))
+      sleep 0.1
+    done
+    printf "\r"
+    # show cursor
+    printf "\e[?25h"
+  fi
+
+  # Get exit code
+  wait "$pid"
+  local rc=$?
+  if (( rc==0 )); then
+    ok "$label — done"
+  else
+    err "$label — failed (see $LOG_FILE)"
+    return $rc
+  fi
+}
+
 # =================== Telegram Config ===================
 TELEGRAM_TOKEN="${TELEGRAM_TOKEN:-}"
 TELEGRAM_CHAT_IDS="${TELEGRAM_CHAT_IDS:-${TELEGRAM_CHAT_ID:-}}"
@@ -72,7 +107,6 @@ if [[ "${_addbtn:-}" =~ ^([yY]|yes)$ ]]; then
   while true; do
     echo "   —— Button $((i+1)) ——"
     read -rp "   🔖 Button Label [default: ${DEFAULT_LABEL}]: " _lbl || true
-    # Default label + default URL (Enter)
     if [[ -z "${_lbl:-}" ]]; then
       BTN_LABELS+=("${DEFAULT_LABEL}")
       BTN_URLS+=("${DEFAULT_URL}")
@@ -93,7 +127,6 @@ if [[ "${_addbtn:-}" =~ ^([yY]|yes)$ ]]; then
         fi
       done
     fi
-    # safe increment under set -e
     i=$(( i + 1 ))
     (( i >= 3 )) && break
     read -rp "   ➕ Add another button? [y/N]: " _more || true
@@ -223,35 +256,33 @@ VMESS_WS_TAG="N4-VMess-WS"
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
 END_EPOCH="$(( START_EPOCH + 5*3600 ))"
-fmt_dt(){ date -d @"$1" "+%A, %B %d, %Y %I:%M %p"; }   # e.g., Sunday, October 12, 2025 04:21:00 PM
+fmt_dt(){ date -d @"$1" "+%A, %B %d, %Y %I:%M %p"; }
 START_LOCAL="$(fmt_dt "$START_EPOCH")"
 END_LOCAL="$(fmt_dt "$END_EPOCH")"
-
-# Also show current date/time for message header
 NOW_DATE="$(date +"%A, %B %d, %Y")"
 NOW_TIME="$(date +"%I:%M %p")"
 
 sec "Timing"
-kv "Start Time:"    "${START_LOCAL} "
-kv "End Time:" "${END_LOCAL} "
+kv "Start Time:" "${START_LOCAL} "
+kv "End Time:"   "${END_LOCAL} "
 
-# =================== Enable APIs & Deploy ===================
+# =================== Enable APIs & Deploy (with spinner) ===================
 sec "Enable APIs"
-gcloud services enable run.googleapis.com cloudbuild.googleapis.com --quiet 2>>"$LOG_FILE" | tee -a "$LOG_FILE" >/dev/null
-ok "APIs Enabled"
+run_with_spinner "Enabling required APIs…" \
+  gcloud services enable run.googleapis.com cloudbuild.googleapis.com --quiet
 
 sec "Deploying"
-gcloud run deploy "$SERVICE" \
-  --image="$IMAGE" \
-  --platform=managed \
-  --region="$REGION" \
-  --memory="$MEMORY" \
-  --cpu="$CPU" \
-  --timeout="$TIMEOUT" \
-  --allow-unauthenticated \
-  --port="$PORT" \
-  --quiet 2>>"$LOG_FILE" | tee -a "$LOG_FILE" >/dev/null
-ok "Deployed Successfully"
+run_with_spinner "Deploying to Cloud Run…" \
+  gcloud run deploy "$SERVICE" \
+    --image="$IMAGE" \
+    --platform=managed \
+    --region="$REGION" \
+    --memory="$MEMORY" \
+    --cpu="$CPU" \
+    --timeout="$TIMEOUT" \
+    --allow-unauthenticated \
+    --port="$PORT" \
+    --quiet
 
 # =================== Result ===================
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" 2>>"$LOG_FILE"
@@ -322,4 +353,4 @@ tg_send "<b>✅ Deploy Success</b>
 <b>📆 Validity:</b> 5 hours (Ends at ${END_LOCAL})
 "
 
-printf "\n${C_GREEN}${BOLD}✨ Done. AM/PM formatting applied & Telegram message includes clear Date/Time. Logs: ${LOG_FILE}${RESET}\n"
+printf "\n${C_GREEN}${BOLD}✨ Done. Spinner added for API enable & deployment. Logs: ${LOG_FILE}${RESET}\n"
