@@ -72,7 +72,7 @@ if [[ "${_addbtn:-}" =~ ^([yY]|yes)$ ]]; then
   while true; do
     echo "   —— Button $((i+1)) ——"
     read -rp "   🔖 Button Label [default: ${DEFAULT_LABEL}]: " _lbl || true
-    # ✅ Default label + URL handling
+    # Default label + default URL (Enter)
     if [[ -z "${_lbl:-}" ]]; then
       BTN_LABELS+=("${DEFAULT_LABEL}")
       BTN_URLS+=("${DEFAULT_URL}")
@@ -93,11 +93,9 @@ if [[ "${_addbtn:-}" =~ ^([yY]|yes)$ ]]; then
         fi
       done
     fi
-    # Safe increment (no error even if i unset)
+    # safe increment under set -e
     i=$(( i + 1 ))
-    # Stop if 3 buttons reached
-    if (( i >= 3 )); then break; fi
-    # Ask for more
+    (( i >= 3 )) && break
     read -rp "   ➕ Add another button? [y/N]: " _more || true
     [[ "${_more:-}" =~ ^([yY]|yes)$ ]] || break
   done
@@ -221,17 +219,21 @@ VMESS_UUID="0c890000-4733-b20e-067f-fc341bd20000"
 VMESS_PATH_WS="%2FN4VMESS"
 VMESS_WS_TAG="N4-VMess-WS"
 
-# =================== Time (Start/End+5h; no start message) ===================
+# =================== Time (Start/End+5h; AM/PM formatting) ===================
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
 END_EPOCH="$(( START_EPOCH + 5*3600 ))"
-fmt(){ date -d @"$1" "+%Y-%m-%d %H:%M:%S %Z"; }
-START_LOCAL="$(fmt "$START_EPOCH")"
-END_LOCAL="$(fmt "$END_EPOCH")"
+fmt_dt(){ date -d @"$1" "+%A, %B %d, %Y %I:%M:%S %p"; }   # e.g., Sunday, October 12, 2025 04:21:00 PM
+START_LOCAL="$(fmt_dt "$START_EPOCH")"
+END_LOCAL="$(fmt_dt "$END_EPOCH")"
+
+# Also show current date/time for message header
+NOW_DATE="$(date +"%A, %B %d, %Y")"
+NOW_TIME="$(date +"%I:%M:%S %p")"
 
 sec "Timing"
-kv "Start:"    "${START_LOCAL}"
-kv "End(+5h):" "${END_LOCAL}"
+kv "Start:"    "${START_LOCAL} (Asia/Yangon)"
+kv "End(+5h):" "${END_LOCAL} (Asia/Yangon)"
 
 # =================== Enable APIs & Deploy ===================
 sec "Enable APIs"
@@ -308,14 +310,16 @@ esac
 
 # =================== Notify (Deploy Success) ===================
 tg_send "<b>✅ Deploy Success</b>
+<b>📅 Date:</b> ${NOW_DATE}
+<b>🕒 Time:</b> ${NOW_TIME} <i>(Asia/Yangon)</i>
 <b>🛎️ Service:</b> ${SERVICE}
 <b>🧩 Protocol:</b> ${PROTO^^}
 <b>🌍 Region:</b> ${REGION}
 <b>🔗 URL:</b> ${URL_CANONICAL}
 <b>🔑 Key:</b> <pre><code>${URI}</code></pre>
-<b>🕒 Start:</b> ${START_LOCAL}
-<b>⏳ End(+5h):</b> ${END_LOCAL}
-<b>⏳ Validity:</b> 5 hours (End at: ${END_LOCAL})
+<b>🕒 Start Time:</b> ${START_LOCAL} <i>(Asia/Yangon)</i>
+<b>⏳ End (+5h):</b> ${END_LOCAL} <i>(Asia/Yangon)</i>
+<b>📆 Validity:</b> 5 hours (Ends at ${END_LOCAL})
 "
 
-printf "\n${C_GREEN}${BOLD}✨ Done. Fixed the i++ issue for set -e. If anything else fails, check: ${LOG_FILE}${RESET}\n"
+printf "\n${C_GREEN}${BOLD}✨ Done. AM/PM formatting applied & Telegram message includes clear Date/Time. Logs: ${LOG_FILE}${RESET}\n"
