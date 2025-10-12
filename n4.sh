@@ -340,17 +340,15 @@ case "$PROTO" in
 esac
 
 # =================== Notify (Deploy Success) ===================
-tg_send "<b>✅ Deploy Success</b>
+tg_send "<b>✅ CloudRun Deploy Success</b>
 <b>📅 Date:</b> ${NOW_DATE}
 <b>🕒 Time:</b> ${NOW_TIME} <i>(Asia/Yangon)</i>
-<b>🛎️ Service:</b> ${SERVICE}
 <b>🧩 Protocol:</b> ${PROTO^^}
 <b>🌍 Region:</b> ${REGION}
 <b>🔗 URL:</b> ${URL_CANONICAL}
-<b>🔑 Key:</b> <pre><code>${URI}</code></pre>
+<b>🔑 Key :</b> <pre><code>${URI}</code></pre>
 <b>🕒 Start Time:</b> ${START_LOCAL}
 <b>⏳ End Time:</b> ${END_LOCAL}
-<b>📆 Validity:</b> 5 hours (Ends at ${END_LOCAL})
 "
 
-printf "\n${C_GREEN}${BOLD}✨ Done. Spinner added for API enable & deployment. Logs: ${LOG_FILE}${RESET}\n"
+printf "\n${C_GREEN}${BOLD}✨ Depoly&Send Done. Script By N4ND404 (N4VPN TEAM)${LOG_FILE}${RESET}\n"
