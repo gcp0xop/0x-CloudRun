@@ -282,19 +282,13 @@ banner "📣 Step 10 — Telegram Notify"
 MSG=$(cat <<EOF
 ✅ <b>CloudRun Deploy Success</b>
 ━━━━━━━━━━━━━━━━━━
-<blockquote>
-🌍 <b>Region:</b> ${REGION}
+<blockquote>🌍 <b>Region:</b> ${REGION}
 ⚙️ <b>Protocol:</b> ${PROTO^^}
-🔗 <b>URL:</b> <a href="${URL_CANONICAL}">${URL_CANONICAL}</a>
-</blockquote>
-
+🔗 <b>URL:</b> <a href="${URL_CANONICAL}">${URL_CANONICAL}</a></blockquote>
 🔑 <b>V2Ray Configuration Access Key :</b>
 <pre><code>${URI}</code></pre>
-
-<blockquote>
-🕒 <b>Start:</b> ${START_LOCAL}
-⏳ <b>End:</b> ${END_LOCAL}
-</blockquote>
+<blockquote>🕒 <b>Start:</b> ${START_LOCAL}
+⏳ <b>End:</b> ${END_LOCAL}</blockquote>
 ━━━━━━━━━━━━━━━━━━
 EOF
 )
