@@ -12,9 +12,10 @@ touch "$LOG_FILE"
 on_err() {
   local rc=$?
   echo "" | tee -a "$LOG_FILE"
-  echo "✘ ERROR: Command failed (exit $rc) at line $LINENO: ${BASH_COMMAND}" | tee -a "$LOG_FILE" >&2
+  echo "❌ ERROR: Command failed (exit $rc) at line $LINENO: ${BASH_COMMAND}" | tee -a "$LOG_FILE" >&2
   echo "—— LOG (last 80 lines) ——" >&2
   tail -n 80 "$LOG_FILE" >&2 || true
+  echo "📄 Log File: $LOG_FILE" >&2
   exit $rc
 }
 trap on_err ERR
@@ -29,205 +30,166 @@ if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
 else
   RESET= BOLD= DIM= C_CYAN= C_BLUE= C_GREEN= C_YEL= C_ORG= C_PINK= C_GREY= C_RED=
 fi
-hr(){ printf "${C_GREY}%s${RESET}\n" "──────────────────────────────────────────────"; }
-sec(){ printf "\n${C_BLUE}📦 ${BOLD}%s${RESET}\n" "$1"; hr; }
-ok(){ printf "${C_GREEN}✔${RESET} %s\n" "$1"; }
-warn(){ printf "${C_ORG}⚠${RESET} %s\n" "$1"; }
-err(){ printf "${C_RED}✘${RESET} %s\n" "$1"; }
-kv(){ printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"; }
 
-printf "\n${C_CYAN}${BOLD}🚀 N4 Cloud Run — One-Click Deploy${RESET} ${C_GREY}(Trojan gRPC / VLESS WS / VLESS gRPC / VMess WS)${RESET}\n"
+hr(){ printf "${C_GREY}%s${RESET}\n" "──────────────────────────────────────────────"; }
+banner(){
+  local title="$1"
+  printf "\n${C_BLUE}${BOLD}╔══════════════════════════════════════════════════╗${RESET}\n"
+  printf   "${C_BLUE}${BOLD}║${RESET}  %s${RESET}\n" "$(printf "%-46s" "$title")"
+  printf   "${C_BLUE}${BOLD}╚══════════════════════════════════════════════════╝${RESET}\n"
+}
+ok(){   printf "${C_GREEN}✔${RESET} %s\n" "$1"; }
+warn(){ printf "${C_ORG}⚠${RESET} %s\n" "$1"; }
+err(){  printf "${C_RED}✘${RESET} %s\n" "$1"; }
+kv(){   printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"; }
+
+printf "\n${C_CYAN}${BOLD}🚀 N4 Cloud Run — One-Click Deploy${RESET} ${C_GREY}(Trojan WS / VLESS WS / VLESS gRPC / VMess WS)${RESET}\n"
 hr
 
-# =================== Spinner Utils (TTY-aware) ===================
-run_with_spinner() {
+# =================== Random progress spinner ===================
+run_with_progress() {
   local label="$1"; shift
   ( "$@" ) >>"$LOG_FILE" 2>&1 &
   local pid=$!
-
+  local pct=5
   if [[ -t 1 ]]; then
-    local frames=( "⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏" )
-    local i=0
     printf "\e[?25l"
     while kill -0 "$pid" 2>/dev/null; do
-      printf "\r   %s %s" "$label" "${frames[$i]}"
-      i=$(( (i+1) % ${#frames[@]} ))
-      sleep 0.1
+      local step=$(( (RANDOM % 9) + 2 ))
+      pct=$(( pct + step ))
+      (( pct > 95 )) && pct=95
+      printf "\r🌀 %s... [%s%%]" "$label" "$pct"
+      sleep "$(awk -v r=$RANDOM 'BEGIN{s=0.08+(r%7)/100; printf "%.2f", s }')"
     done
+    wait "$pid"; local rc=$?
     printf "\r"
+    if (( rc==0 )); then
+      printf "✅ %s... [100%%]\n" "$label"
+    else
+      printf "❌ %s failed (see %s)\n" "$label" "$LOG_FILE"
+      return $rc
+    fi
     printf "\e[?25h"
-  fi
-
-  wait "$pid"
-  local rc=$?
-  if (( rc==0 )); then
-    ok "$label — done"
   else
-    err "$label — failed (see $LOG_FILE)"
-    return $rc
+    wait "$pid"
   fi
 }
 
-# =================== Telegram Config ===================
+# =================== Step 1: Telegram Config ===================
+banner "🚀 Step 1 — Telegram Setup"
 TELEGRAM_TOKEN="${TELEGRAM_TOKEN:-}"
 TELEGRAM_CHAT_IDS="${TELEGRAM_CHAT_IDS:-${TELEGRAM_CHAT_ID:-}}"
 
-# .env fallback (only if missing)
 if [[ ( -z "${TELEGRAM_TOKEN}" || -z "${TELEGRAM_CHAT_IDS}" ) && -f .env ]]; then
   set -a; source ./.env; set +a
 fi
 
-printf "\n${C_PINK}${BOLD}Telegram Setup${RESET}\n"
-read -rp "   🤖 Telegram Bot Token (e.g. 123456:ABC...): " _tk || true
-if [[ -n "${_tk:-}" ]]; then TELEGRAM_TOKEN="$_tk"; fi
+read -rp "🤖 Telegram Bot Token: " _tk || true
+[[ -n "${_tk:-}" ]] && TELEGRAM_TOKEN="$_tk"
 if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then
-  warn "Telegram token empty; you can still deploy, but messages won't be sent."
+  warn "Telegram token empty; deploy will continue without messages."
 else
-  ok "Telegram token captured: ${TELEGRAM_TOKEN}"
+  ok "Telegram token captured."
 fi
 
-read -rp "   👤 Owner/Channel Chat ID(s) (comma-separated): " _ids || true
-if [[ -n "${_ids:-}" ]]; then TELEGRAM_CHAT_IDS="${_ids// /}"; fi
+read -rp "👤 Owner/Channel Chat ID(s): " _ids || true
+[[ -n "${_ids:-}" ]] && TELEGRAM_CHAT_IDS="${_ids// /}"
 
-# ----- URL Buttons (optional, up to 3) -----
 DEFAULT_LABEL="Join N4 VPN Channel"
 DEFAULT_URL="https://t.me/n4vpn"
-BTN_LABELS=()
-BTN_URLS=()
+BTN_LABELS=(); BTN_URLS=()
 
-read -rp "   ➕ Add URL button(s)? [y/N]: " _addbtn || true
+read -rp "➕ Add URL button(s)? [y/N]: " _addbtn || true
 if [[ "${_addbtn:-}" =~ ^([yY]|yes)$ ]]; then
   i=0
   while true; do
-    echo "   —— Button $((i+1)) ——"
-    read -rp "   🔖 Button Label [default: ${DEFAULT_LABEL}]: " _lbl || true
+    echo "—— Button $((i+1)) ——"
+    read -rp "🔖 Label [default: ${DEFAULT_LABEL}]: " _lbl || true
     if [[ -z "${_lbl:-}" ]]; then
       BTN_LABELS+=("${DEFAULT_LABEL}")
       BTN_URLS+=("${DEFAULT_URL}")
       ok "Added: ${DEFAULT_LABEL} → ${DEFAULT_URL}"
     else
-      while :; do
-        read -rp "   🔗 Button URL (http/https): " _url || true
-        if [[ -z "${_url:-}" ]]; then
-          warn "Empty URL — Skipped this button."
-          break
-        elif [[ "${_url}" =~ ^https?:// ]]; then
-          BTN_LABELS+=("${_lbl}")
-          BTN_URLS+=("${_url}")
-          ok "Added: ${_lbl} → ${_url}"
-          break
-        else
-          warn "Please enter a valid http(s) URL."
-        fi
-      done
+      read -rp "🔗 URL (http/https): " _url || true
+      if [[ -n "${_url:-}" && "${_url}" =~ ^https?:// ]]; then
+        BTN_LABELS+=("${_lbl}")
+        BTN_URLS+=("${_url}")
+        ok "Added: ${_lbl} → ${_url}"
+      else
+        warn "Skipped (invalid or empty URL)."
+      fi
     fi
     i=$(( i + 1 ))
     (( i >= 3 )) && break
-    read -rp "   ➕ Add another button? [y/N]: " _more || true
+    read -rp "➕ Add another button? [y/N]: " _more || true
     [[ "${_more:-}" =~ ^([yY]|yes)$ ]] || break
   done
 fi
 
-# Build receivers array
 CHAT_ID_ARR=()
 IFS=',' read -r -a CHAT_ID_ARR <<< "${TELEGRAM_CHAT_IDS:-}" || true
 
-# JSON escape helper
 json_escape(){ printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 
-# Telegram send helper (custom inline layout)
 tg_send(){
-  local text="$1"
-  if [[ -z "${TELEGRAM_TOKEN:-}" || ${#CHAT_ID_ARR[@]} -eq 0 ]]; then
-    warn "Telegram not configured (skip send)."
-    echo "[tg_send] skipped: token='${TELEGRAM_TOKEN:-empty}' ids='${TELEGRAM_CHAT_IDS:-empty}'" >>"$LOG_FILE"
-    return 0
-  fi
-
-  local RM=""
+  local text="$1" RM=""
+  if [[ -z "${TELEGRAM_TOKEN:-}" || ${#CHAT_ID_ARR[@]} -eq 0 ]]; then return 0; fi
   if (( ${#BTN_LABELS[@]} > 0 )); then
-    # Escape labels/urls
     local L1 U1 L2 U2 L3 U3
     [[ -n "${BTN_LABELS[0]:-}" ]] && L1="$(json_escape "${BTN_LABELS[0]}")" && U1="$(json_escape "${BTN_URLS[0]}")"
     [[ -n "${BTN_LABELS[1]:-}" ]] && L2="$(json_escape "${BTN_LABELS[1]}")" && U2="$(json_escape "${BTN_URLS[1]}")"
     [[ -n "${BTN_LABELS[2]:-}" ]] && L3="$(json_escape "${BTN_LABELS[2]}")" && U3="$(json_escape "${BTN_URLS[2]}")"
-
     if (( ${#BTN_LABELS[@]} == 1 )); then
-      # one big row (full width)
       RM="{\"inline_keyboard\":[[{\"text\":\"${L1}\",\"url\":\"${U1}\"}]]}"
     elif (( ${#BTN_LABELS[@]} == 2 )); then
-      # two big rows (top/bottom)
-      RM="{\"inline_keyboard\":[
-        [{\"text\":\"${L1}\",\"url\":\"${U1}\"}],
-        [{\"text\":\"${L2}\",\"url\":\"${U2}\"}]
-      ]}"
+      RM="{\"inline_keyboard\":[[{\"text\":\"${L1}\",\"url\":\"${U1}\"}],[{\"text\":\"${L2}\",\"url\":\"${U2}\"}]]}"
     else
-      # three: top one big, bottom two side-by-side
-      RM="{\"inline_keyboard\":[
-        [{\"text\":\"${L1}\",\"url\":\"${U1}\"}],
-        [{\"text\":\"${L2}\",\"url\":\"${U2}\"},{\"text\":\"${L3}\",\"url\":\"${U3}\"}]
-      ]}"
+      RM="{\"inline_keyboard\":[[{\"text\":\"${L1}\",\"url\":\"${U1}\"}],[{\"text\":\"${L2}\",\"url\":\"${U2}\"},{\"text\":\"${L3}\",\"url\":\"${U3}\"}]]}"
     fi
   fi
-
   for _cid in "${CHAT_ID_ARR[@]}"; do
-    if [[ -n "$RM" ]]; then
-      RESP=$(curl -s -S -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-        -d "chat_id=${_cid}" \
-        --data-urlencode "text=${text}" \
-        -d "parse_mode=HTML" \
-        --data-urlencode "reply_markup=${RM}" 2>>"$LOG_FILE" )
-    else
-      RESP=$(curl -s -S -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-        -d "chat_id=${_cid}" \
-        --data-urlencode "text=${text}" \
-        -d "parse_mode=HTML" 2>>"$LOG_FILE" )
-    fi
-    echo "[tg_send] response: $RESP" >>"$LOG_FILE"
-    if [[ "$RESP" != *'"ok":true'* ]]; then
-      warn "Telegram send failed for chat_id=${_cid} (see $LOG_FILE)"
-    else
-      ok "Telegram message sent to ${_cid}"
-    fi
+    curl -s -S -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+      -d "chat_id=${_cid}" \
+      --data-urlencode "text=${text}" \
+      -d "parse_mode=HTML" \
+      ${RM:+--data-urlencode "reply_markup=${RM}"} >>"$LOG_FILE" 2>&1
+    ok "Telegram sent → ${_cid}"
   done
 }
 
-# =================== Project ===================
-sec "Project"
+# =================== Step 2: Project ===================
+banner "🧭 Step 2 — GCP Project"
 PROJECT="$(gcloud config get-value project 2>/dev/null || true)"
 if [[ -z "$PROJECT" ]]; then
-  err "No active GCP project."
-  echo "👉 gcloud config set project <YOUR_PROJECT_ID>"
+  err "No active project. Run: gcloud config set project <YOUR_PROJECT_ID>"
   exit 1
 fi
-PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" 2>>"$LOG_FILE"
-ok "Loaded Project"
-kv "Project:" "${BOLD}${PROJECT}${RESET}"
-kv "Project No.:" "${PROJECT_NUMBER}"
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
+ok "Project Loaded: ${PROJECT}"
 
-# =================== Protocol (exactly 4) ===================
-sec "Protocol"
-echo "   1) Trojan gRPC"
-echo "   2) VLESS WS"
-echo "   3) VLESS gRPC"
-echo "   4) VMess WS"
-read -rp "   Choose [1-4, default 1]: " _opt || true
+# =================== Step 3: Protocol ===================
+banner "🧩 Step 3 — Select Protocol"
+echo "  1️⃣ Trojan WS"
+echo "  2️⃣ VLESS WS"
+echo "  3️⃣ VLESS gRPC"
+echo "  4️⃣ VMess WS"
+read -rp "Choose [1-4, default 1]: " _opt || true
 case "${_opt:-1}" in
-  2) PROTO="vless-ws"    ; IMAGE="docker.io/n4vip/vless:latest"        ;;
-  3) PROTO="vless-grpc"  ; IMAGE="docker.io/n4vip/vlessgrpc:latest"    ;;
-  4) PROTO="vmess-ws"    ; IMAGE="docker.io/n4vip/vmess:latest"        ;;
-  *) PROTO="trojan-grpc" ; IMAGE="docker.io/n4vip/trojangrpc:latest"   ;;
+  2) PROTO="vless-ws"   ; IMAGE="docker.io/n4pro/vl:latest"        ;;
+  3) PROTO="vless-grpc" ; IMAGE="docker.io/n4pro/vlessgrpc:latest" ;;
+  4) PROTO="vmess-ws"   ; IMAGE="docker.io/n4pro/vmess:latest"     ;;
+  *) PROTO="trojan-ws"  ; IMAGE="docker.io/n4pro/tr:latest"        ;;
 esac
 ok "Protocol selected: ${PROTO^^}"
-kv "Docker Image:" "${IMAGE}"
+echo "[Docker Hidden] ${IMAGE}" >>"$LOG_FILE"
 
-# =================== Region ===================
-sec "Region"
-echo "   1) 🇸🇬 Singapore (asia-southeast1)"
-echo "   2) 🇺🇸 US (us-central1)"
-echo "   3) 🇮🇩 Indonesia (asia-southeast2)"
-echo "   4) 🇯🇵 Japan (asia-northeast1)"
-read -rp "   Choose [1-4, default 2]: " _r || true
+# =================== Step 4: Region ===================
+banner "🌍 Step 4 — Region"
+echo "1) 🇸🇬 Singapore (asia-southeast1)"
+echo "2) 🇺🇸 US (us-central1)"
+echo "3) 🇮🇩 Indonesia (asia-southeast2)"
+echo "4) 🇯🇵 Japan (asia-northeast1)"
+read -rp "Choose [1-4, default 2]: " _r || true
 case "${_r:-2}" in
   1) REGION="asia-southeast1";;
   3) REGION="asia-southeast2";;
@@ -236,54 +198,42 @@ case "${_r:-2}" in
 esac
 ok "Region: ${REGION}"
 
-# =================== CPU & Memory ===================
-sec "Resources"
-read -rp "   CPU [1/2/4/6, default 2]: " _cpu || true
+# =================== Step 5: Resources ===================
+banner "🧮 Step 5 — Resources"
+read -rp "CPU [1/2/4/6, default 2]: " _cpu || true
 CPU="${_cpu:-2}"
-read -rp "   Memory [512Mi/1Gi/2Gi(default)/4Gi/8Gi]: " _mem || true
+read -rp "Memory [512Mi/1Gi/2Gi(default)/4Gi/8Gi]: " _mem || true
 MEMORY="${_mem:-2Gi}"
 ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
 
-# =================== Other defaults ===================
+# =================== Step 6: Service Name ===================
+banner "🪪 Step 6 — Service Name"
 SERVICE="${SERVICE:-freen4vpn}"
 TIMEOUT="${TIMEOUT:-3600}"
 PORT="${PORT:-8080}"
-read -rp "   Service name [default: ${SERVICE}]: " _svc || true
+read -rp "Service name [default: ${SERVICE}]: " _svc || true
 SERVICE="${_svc:-$SERVICE}"
+ok "Service: ${SERVICE}"
 
-# =================== Keys / Tags / Paths ===================
-VLESS_WS_TAG="VLESS WS Protocol"
-VLESS_GRPC_TAG="Vless Grpc"
-TROJAN_PASS="Nanda"
-TROJAN_GRPC_SVC="n4trojan-grpc"
-TROJAN_GRPC_TAG="GCP TROJAN gRPC"
-VLESS_UUID="0c890000-4733-b20e-067f-fc341bd20000"
-VLESS_PATH_WS="%2FN4VPN"
-VLESS_UUID_GRPC="0c890000-4733-b20e-067f-fc341bd20000"
-VLESS_GRPC_SVC="n4vpnfree-grpc"
-VMESS_UUID="0c890000-4733-b20e-067f-fc341bd20000"
-VMESS_PATH_WS="%2FN4VMESS"
-VMESS_WS_TAG="N4-VMess-WS"
-
-# =================== Time (Start/End+5h; dd.mm.yyyy + AM/PM) ===================
+# =================== Timezone Setup ===================
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
 END_EPOCH="$(( START_EPOCH + 5*3600 ))"
-fmt_dt(){ date -d @"$1" "+%d.%m.%Y %I:%M %p"; }   # 12.10.2025 10:41 PM
+fmt_dt(){ date -d @"$1" "+%d.%m.%Y %I:%M %p"; }
 START_LOCAL="$(fmt_dt "$START_EPOCH")"
 END_LOCAL="$(fmt_dt "$END_EPOCH")"
+banner "🕒 Step 7 — Deployment Time"
+kv "Start:" "${START_LOCAL}"
+kv "End:"   "${END_LOCAL}"
 
-sec "Timing"
-kv "Start Time:" "${START_LOCAL} (Asia/Yangon)"
-kv "End Time:"   "${END_LOCAL} (Asia/Yangon)"
-
-# =================== Enable APIs & Deploy (with spinner) ===================
-sec "Enable APIs"
-run_with_spinner "Enabling required APIs…" \
+# =================== Enable APIs ===================
+banner "⚙️ Step 8 — Enable APIs"
+run_with_progress "Enabling CloudRun & Build APIs" \
   gcloud services enable run.googleapis.com cloudbuild.googleapis.com --quiet
 
-sec "Deploying"
-run_with_spinner "Deploying to Cloud Run…" \
+# =================== Deploy ===================
+banner "🚀 Step 9 — Deploying to Cloud Run"
+run_with_progress "Deploying ${SERVICE}" \
   gcloud run deploy "$SERVICE" \
     --image="$IMAGE" \
     --platform=managed \
@@ -293,70 +243,51 @@ run_with_spinner "Deploying to Cloud Run…" \
     --timeout="$TIMEOUT" \
     --allow-unauthenticated \
     --port="$PORT" \
+    --min-instances=1 \
     --quiet
 
 # =================== Result ===================
-PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" 2>>"$LOG_FILE"
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
 CANONICAL_HOST="${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
 URL_CANONICAL="https://${CANONICAL_HOST}"
-
-sec "Result"
+banner "✅ Result"
 ok "Service Ready"
 kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
 
-# =================== Build Client URI ===================
+# =================== Protocol URLs ===================
+TROJAN_PASS="Trojan-2025"
+VLESS_UUID="0c890000-4733-b20e-067f-fc341bd20000"
+VLESS_UUID_GRPC="0c890000-4733-4a0e-9a7f-fc341bd20000"
+VMESS_UUID="0c890000-4733-b20e-067f-fc341bd20000"
+
 make_vmess_ws_uri(){
   local host="$1"
   local json=$(cat <<JSON
-{
-  "v": "2",
-  "ps": "${VMESS_WS_TAG}",
-  "add": "m.googleapis.com",
-  "port": "443",
-  "id": "${VMESS_UUID}",
-  "aid": "0",
-  "scy": "auto",
-  "net": "ws",
-  "type": "none",
-  "host": "${host}",
-  "path": "/${VMESS_PATH_WS//%2F/}",
-  "tls": "tls",
-  "sni": "m.googleapis.com",
-  "alpn": "http/1.1",
-  "fp": "randomized"
-}
+{"v":"2","ps":"VMess-WS","add":"vpn.googleapis.com","port":"443","id":"${VMESS_UUID}","aid":"0","scy":"zero","net":"ws","type":"none","host":"${host}","path":"/N4","tls":"tls","sni":"vpn.googleapis.com","alpn":"http/1.1","fp":"randomized"}
 JSON
 )
-  if base64 --help 2>&1 | grep -q '\-w'; then
-    printf "vmess://%s" "$(printf '%s' "$json" | base64 -w0)"
-  else
-    printf "vmess://%s" "$(printf '%s' "$json" | base64 | tr -d '\n')"
-  fi
+  base64 <<<"$json" | tr -d '\n' | sed 's/^/vmess:\/\//'
 }
 
-URI=""
 case "$PROTO" in
-  trojan-grpc)
-    URI="trojan://${TROJAN_PASS}@m.googleapis.com:443?mode=gun&security=tls&type=grpc&serviceName=${TROJAN_GRPC_SVC}&sni=${CANONICAL_HOST}#${TROJAN_GRPC_TAG}"
-    ;;
-  vless-ws)
-    URI="vless://${VLESS_UUID}@m.googleapis.com:443?path=${VLESS_PATH_WS}&security=tls&alpn=http%2F1.1&encryption=none&host=${CANONICAL_HOST}&fp=randomized&type=ws&sni=m.googleapis.com#${VLESS_WS_TAG}"
-    ;;
-  vless-grpc)
-    URI="vless://${VLESS_UUID_GRPC}@m.googleapis.com:443?mode=gun&security=tls&alpn=h2&encryption=none&type=grpc&serviceName=${VLESS_GRPC_SVC}&sni=${CANONICAL_HOST}#${VLESS_GRPC_TAG}"
-    ;;
-  vmess-ws)
-    URI="$(make_vmess_ws_uri "${CANONICAL_HOST}")"
-    ;;
+  trojan-ws)  URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host=${CANONICAL_HOST}&type=ws#Trojan-WS" ;;
+  vless-ws)   URI="vless://${VLESS_UUID}@vpn.googleapis.com:443?path=%2FN4&security=tls&encryption=none&host=${CANONICAL_HOST}&type=ws#Vless-WS" ;;
+  vless-grpc) URI="vless://${VLESS_UUID_GRPC}@vpn.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=n4-grpc&sni=${CANONICAL_HOST}#VLESS-gRPC" ;;
+  vmess-ws)   URI="$(make_vmess_ws_uri "${CANONICAL_HOST}")" ;;
 esac
 
-# =================== Notify (Deploy Success) ===================
-tg_send "<b>✅ CloudRun Deploy Success</b>
-<b>🌍 Region:</b> ${REGION}
-<b>🔗 URL:</b> ${URL_CANONICAL}
-<b>🔑 Key :</b> <pre><code>${URI}</code></pre>
-<b>🕒 Start Time:</b> ${START_LOCAL}
-<b>⏳ End Time:</b> ${END_LOCAL}
+# =================== Telegram Notify ===================
+banner "📣 Step 10 — Telegram Notify"
+tg_send "✅ <b>CloudRun Deploy Success</b>
+━━━━━━━━━━━━━━━━━━
+🌍 <b>Region:</b> ${REGION}
+⚙️ <b>Protocol:</b> ${PROTO^^}
+🔗 <b>URL:</b> ${URL_CANONICAL}
+🔑 <b>V2ray Configuration Access Key :</b> <pre><code>${URI}</code></pre>
+🕒 <b>Start:</b> ${START_LOCAL}
+⏳ <b>End:</b> ${END_LOCAL}
+━━━━━━━━━━━━━━━━━━
 "
 
-printf "\n${C_GREEN}${BOLD}✨ Deploy & Send Done. Logs: ${LOG_FILE}${RESET}\n"
+printf "\n${C_GREEN}${BOLD}✨ Done — Warm Instance Enabled (min=1) | Beautiful Banner UI | Cold Start Prevented${RESET}\n"
+printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
