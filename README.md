@@ -53,7 +53,7 @@ Telegram Bot မှာ Result ကို Auto Receive လုပ်ချင်ပ
 အောက်ပါပုံစံအတိုင်း Token နှင့် Chat ID ကို Inline ထည့်ပါ👇
 ```bash
 TELEGRAM_TOKEN="123456:ABC..." TELEGRAM_CHAT_ID="123456789" \
-bash <(curl -fsSL https://raw.githubusercontent.com/Nanda-N4/0x-CloudRun/main/0x.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/gcp0xop/0x-CloudRun/main/0x.sh)
 
 ```
 > သို့မဟုတ် Script Run ချိန်တွင် **Telegram Token** & **Chat ID** တောင်းလာလျှင်  
