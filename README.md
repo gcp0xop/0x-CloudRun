@@ -1,6 +1,6 @@
 ---
 
-<h1 align="center">🚀 N4 CloudRun</h1>
+<h1 align="center">🚀 0x CloudRun</h1>
 <h3 align="center">✨ Multi One-Click Deploy | Auto Telegram | 4 Protocols on CloudRun ✨</h3>
 <p align="center">
   🇺🇲 <a href="README_EN.md">Read On English Language </a> </p>
@@ -8,7 +8,7 @@
 
 ## 📦 Overview
 
-**N4 CloudRun** သည် **Google Cloud Run** ပေါ်တွင်  
+**0x CloudRun** သည် **Google Cloud Run** ပေါ်တွင်  
 **VLESS / Trojan / VMess** Protocol မျိုးစုံကို  
 တစ်ချက်တည်းဖြင့် **Auto Deploy** ပြုလုပ်ပေးသည့် Bash Script ဖြစ်ပါသည်။
 
@@ -78,7 +78,7 @@ Deploy Info + 4 Protocol URLs (🚀) များကို
 >🧮 CPU/RAM : 2 vCPU / 4Gi  
 >🕒 Start   : 2025-10-11 01:30 AM  
 >⏳ Expire  : 2025-10-11 06:30 AM  
->🔗 URL     : https://n4vpn-xxxxxxxx.us-central1.run.app  
+>🔗 URL     : https://0xvpn-xxxxxxxx.us-central1.run.app  
 
 >🚀 **VLESS gRPC**  
 vless://UUID@...#N4%20VPN%20gRPC  
@@ -104,4 +104,4 @@ your support keeps the N4 ecosystem growing stronger!
 
 ---
 
-<p align="center">© 2025 N4 VPN — Built with 💙 for CloudRun Automation</p>
+<p align="center">© 2025 0x VPN — Built with 💙 for CloudRun Automation</p>
