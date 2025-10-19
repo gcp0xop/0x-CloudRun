@@ -26,10 +26,10 @@
 - ⏱️ Fixed Timeout (3600s) + 5-Hour Expiry Window  
 - 📨 Telegram `<pre><code>` Output with **🚀 Keys Only**  
 - 🧭 Paths (Server Config Compatible):
-  - `grpc-n4cloudrun`
-  - `/ws-n4cloudrun`
-  - `trojan-n4grpc`
-  - `/n4vmess-ws`
+  - `grpc-0xcloudrun`
+  - `/ws-0xcloudrun`
+  - `trojan-0xgrpc`
+  - `/0xvmess-ws`
 
 ---
 
