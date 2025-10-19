@@ -95,8 +95,8 @@ fi
 read -rp "👤 Owner/Channel Chat ID(s): " _ids || true
 [[ -n "${_ids:-}" ]] && TELEGRAM_CHAT_IDS="${_ids// /}"
 
-DEFAULT_LABEL="Join N4 VPN Channel"
-DEFAULT_URL="https://t.me/n4vpn"
+DEFAULT_LABEL="Join ks gcp Channel"
+DEFAULT_URL="https://t.me/ks_gcp"
 BTN_LABELS=(); BTN_URLS=()
 
 read -rp "➕ Add URL button(s)? [y/N]: " _addbtn || true
