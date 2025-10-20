@@ -26,10 +26,10 @@
 - ⏱️ Fixed Timeout (3600s) + 5-Hour Expiry Window  
 - 📨 Telegram `<pre><code>` Output with **🚀 Keys Only**  
 - 🧭 Paths (Server Config Compatible):
-  - `grpc-n4cloudrun`
-  - `/ws-n4cloudrun`
-  - `trojan-n4grpc`
-  - `/n4vmess-ws`
+  - `grpc-0xcloudrun`
+  - `/ws-0xcloudrun`
+  - `trojan-0xgrpc`
+  - `/0xvmess-ws`
 
 ---
 
@@ -38,11 +38,11 @@
 **Cloud Shell** တွင် အောက်ပါ Script ကို Paste ပြီး Run လိုက်ပါ👇
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/Nanda-N4/N4-CloudRun/main/n4.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/0x/0x-CloudRun/main/0x.sh)
 ```
 (or using wget)
 ```bash
-bash <(wget -qO- https://raw.githubusercontent.com/Nanda-N4/N4-CloudRun/main/n4.sh)
+bash <(wget -qO- https://raw.githubusercontent.com/0x/0x-CloudRun/main/0x.sh)
 ```
 
 ---
@@ -53,7 +53,7 @@ Telegram Bot မှာ Result ကို Auto Receive လုပ်ချင်ပ
 အောက်ပါပုံစံအတိုင်း Token နှင့် Chat ID ကို Inline ထည့်ပါ👇
 ```bash
 TELEGRAM_TOKEN="123456:ABC..." TELEGRAM_CHAT_ID="123456789" \
-bash <(curl -fsSL https://raw.githubusercontent.com/Nanda-N4/N4-CloudRun/main/n4.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/gcp0xop/0x-CloudRun/main/0x.sh)
 
 ```
 > သို့မဟုတ် Script Run ချိန်တွင် **Telegram Token** & **Chat ID** တောင်းလာလျှင်  
@@ -75,10 +75,11 @@ Deploy Info + 4 Protocol URLs (🚀) များကို
 >📦 **Service Info**  
 >🏷️ Service : n4vpn  
 >🗺️ Region  : 🇺🇸  Iowa (us-central1)  
->🧮 CPU/RAM : 2 vCPU / 4Gi  
+>🧮 CPU/RAM : 2 vCPU / 4Gi
 >🕒 Start   : 2025-10-11 01:30 AM  
 >⏳ Expire  : 2025-10-11 06:30 AM  
 >🔗 URL     : https://0xvpn-xxxxxxxx.us-central1.run.app  
+>🔗 URL     : https://0xgcp-xxxxxxxx.us-central1.run.app  
 
 >🚀 **VLESS gRPC**  
 vless://UUID@...#N4%20VPN%20gRPC  

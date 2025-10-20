@@ -7,7 +7,7 @@ if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
 fi
 
 # ===== Logging & error handler =====
-LOG_FILE="/tmp/n4_cloudrun_$(date +%s).log"
+LOG_FILE="/tmp/ks_gcp_$(date +%s).log"
 touch "$LOG_FILE"
 on_err() {
   local rc=$?
@@ -43,7 +43,7 @@ warn(){ printf "${C_ORG}⚠${RESET} %s\n" "$1"; }
 err(){  printf "${C_RED}✘${RESET} %s\n" "$1"; }
 kv(){   printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"; }
 
-printf "\n${C_CYAN}${BOLD}🚀 N4 Cloud Run — One-Click Deploy${RESET} ${C_GREY}(Trojan WS / VLESS WS / VLESS gRPC / VMess WS)${RESET}\n"
+printf "\n${C_CYAN}${BOLD}🚀 0x Cloud Run — One-Click Deploy${RESET} ${C_GREY}(Trojan WS / VLESS WS / VLESS gRPC / VMess WS)${RESET}\n"
 hr
 
 # =================== Random progress spinner ===================
@@ -95,8 +95,8 @@ fi
 read -rp "👤 Owner/Channel Chat ID(s): " _ids || true
 [[ -n "${_ids:-}" ]] && TELEGRAM_CHAT_IDS="${_ids// /}"
 
-DEFAULT_LABEL="Join N4 VPN Channel"
-DEFAULT_URL="https://t.me/n4vpn"
+DEFAULT_LABEL="Join ks gcp Channel"
+DEFAULT_URL="https://t.me/ks_gcp"
 BTN_LABELS=(); BTN_URLS=()
 
 read -rp "➕ Add URL button(s)? [y/N]: " _addbtn || true
