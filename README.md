@@ -78,6 +78,7 @@ Deploy Info + 4 Protocol URLs (🚀) များကို
 >🧮 CPU/RAM : 2 vCPU / 4Gi
 >🕒 Start   : 2025-10-11 01:30 AM  
 >⏳ Expire  : 2025-10-11 06:30 AM  
+>🔗 URL     : https://0xvpn-xxxxxxxx.us-central1.run.app  
 >🔗 URL     : https://0xgcp-xxxxxxxx.us-central1.run.app  
 
 >🚀 **VLESS gRPC**  
@@ -104,4 +105,4 @@ your support keeps the N4 ecosystem growing stronger!
 
 ---
 
-<p align="center">© 2025 N4 VPN — Built with 💙 for CloudRun Automation</p>
+<p align="center">© 2025 0x VPN — Built with 💙 for CloudRun Automation</p>
