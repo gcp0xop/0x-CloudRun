@@ -243,9 +243,9 @@ URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host
 banner "📣 Step 10 — Telegram Notify"
 
 MSG=$(cat <<EOF
-<b>🌈✨ <u>GCP SERVER Deploy Success!</u> ✨🌈</b>
+<b>✨ <u>GCP SERVER Deploy Success!</u> ✨</b>
 
-<code>━━━━━━━━━━ 🟦🟪🟦🟪🟦━━━━━━━━━━</code>
+<code>━━━━━━━━━ 🟦🟪🟦 ━━━━━━━━━</code>
 
 <b>📊 <u>Service Info</u></b>
 <blockquote>
@@ -264,7 +264,7 @@ MSG=$(cat <<EOF
 <b>🔴 End:</b> <code>${END_LOCAL}</code>
 </blockquote>
 
-<code>━━━━━━━━━━ 🟪🟦🟪🟦🟪━━━━━━━━━━</code>
+<code>━━━━━━━━━ 🟪🟦🟪 ━━━━━━━━━</code>
 
 <b>📚 <u>How to use Key?</u></b>
 👉 <a href="https://t.me/KS_GCP/53?single">သွားကြည့်ပါ</a> <b>🔑✨</b>
