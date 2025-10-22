@@ -244,9 +244,7 @@ banner "📣 Step 10 — Telegram Notify"
 
 MSG=$(cat <<EOF
 <b>✨ <u>GCP SERVER Deploy Success!</u> ✨</b>
-
 <code>━━━━━━━━━ 🟦🟪🟦 ━━━━━━━━━</code>
-
 <b>📊 <u>Service Info</u></b>
 <blockquote>
 <b>🌍 Region:</b> <code>${REGION}</code>
@@ -258,12 +256,11 @@ MSG=$(cat <<EOF
 <b>🔑 <u>Trojan Access Key</u></b>
 <pre><code>${URI}</code></pre>
 
-<b>⏳ <u>GCP END DATE</u></b>
+<b>⏳ <u>GCP END TIME</u></b>
 <blockquote>
 <b>🟢 Start:</b> <code>${START_LOCAL}</code>
 <b>🔴 End:</b> <code>${END_LOCAL}</code>
 </blockquote>
-
 <code>━━━━━━━━━ 🟪🟦🟪 ━━━━━━━━━</code>
 
 <b>📚 <u>How to use Key?</u></b>
