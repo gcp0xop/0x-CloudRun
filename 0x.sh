@@ -262,7 +262,6 @@ MSG=$(cat <<EOF
 <b>🔴 End:</b> <code>${END_LOCAL}</code>
 </blockquote>
 <code>━━━━━━━━━ 🟪🟦🟪 ━━━━━━━━━</code>
-
 <b>📚 <u>How to use Key?</u></b>
 👉 <a href="https://t.me/KS_GCP/53?single">သွားကြည့်ပါ</a> <b>🔑✨</b>
 
