@@ -4,7 +4,9 @@
 <h3 align="center">✨ Multi One-Click Deploy | Auto Telegram | 4 Protocols on CloudRun ✨</h3>
 <p align="center">
  
+ ```
 bash <(curl -fsSL https://raw.githubusercontent.com/gcp0xop/0x-CloudRun/main/0x.sh)
+```
 
 
 > Script Run ချိန်တွင် **Telegram Token** & **Chat ID** တောင်းလာလျှင်  
