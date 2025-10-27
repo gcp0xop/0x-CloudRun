@@ -3,9 +3,7 @@
 <h1 align="center">🚀 0x CloudRun</h1>
 <h3 align="center">✨ Multi One-Click Deploy | Auto Telegram | 4 Protocols on CloudRun ✨</h3>
 <p align="center">
- နှင့် Chat ID ကို Inline ထည့်ပါ👇
-```bash
-TELEGRAM_TOKEN="123456:ABC..." TELEGRAM_CHAT_ID="123456789" \
+ 
 bash <(curl -fsSL https://raw.githubusercontent.com/gcp0xop/0x-CloudRun/main/0x.sh)
 
 ```
