@@ -35,9 +35,3 @@ Deploy Info + 4 Protocol URLs (🚀) များကို
 
 >🚀 **TROJAN gRPC**  
 trojan://pass@...#N4%20Trojan%20gRPC  
-
->🚀 **VMESS WS**  
-vmess://base64...
-
----
-
