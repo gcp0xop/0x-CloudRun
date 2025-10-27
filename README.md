@@ -6,10 +6,9 @@
  
 bash <(curl -fsSL https://raw.githubusercontent.com/gcp0xop/0x-CloudRun/main/0x.sh)
 
-```
+
 > Script Run ချိန်တွင် **Telegram Token** & **Chat ID** တောင်းလာလျှင်  
-> တိကျစွာ စစ်ဆေးပြီး ထည့်ပါ။  
-> 📩 **Bot ကို Start ထားမှသာ Result များကို Auto Send လုပ်ပါလိမ့်မည်။**
+> တိကျစွာ စစ်ဆေးပြီး ထည့်ပါ။
 
 
 
