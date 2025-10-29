@@ -237,22 +237,15 @@ kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
 # =================== Protocol URLs ===================
 TROJAN_PASS="Trojan-2025"
 
-URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host=${CANONICAL_HOST}&type=ws#Trojan-WS"
+URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host=${CANONICAL_HOST}&type=ws#KS_GCP KEY"
 
 # =================== Telegram Notify ===================
 banner "📣 Step 10 — Telegram Notify"
 
 MSG=$(cat <<EOF
-<b>✨ <u>GCP SERVER Deploy Success!</u> ✨</b>
-<code>━━━━━━━━━ 🟦🟪🟦 ━━━━━━━━━</code>
+<b>🚀 <u> **GCP Server Activated!** !</u>🚀 </b>
+<code>━━━━━━━━━ 🟪 ━━━━━━━━━</code>
 <b>📊 <u>Service Info</u></b>
-<blockquote>
-<b>🌍 Region:</b> <code>${REGION}</code>
-<b>🛡️ Protocol:</b> <code>TROJAN-WS</code>
-<b>🏷️ Service Name:</b> <b><span class="tg-spoiler">@KS_GCP</span> 🥇</b>
-<b>🔗 URL:</b> <a href="${URL_CANONICAL}">🔵 OPEN SERVER</a>
-</blockquote>
-
 <b>🔑 <u>Trojan Access Key</u></b>
 <pre><code>${URI}</code></pre>
 
@@ -261,10 +254,9 @@ MSG=$(cat <<EOF
 <b>🟢 Start:</b> <code>${START_LOCAL}</code>
 <b>🔴 End:</b> <code>${END_LOCAL}</code>
 </blockquote>
-<code>━━━━━━━━━ 🟪🟦🟪 ━━━━━━━━━</code>
+<code>━━━━━━━━━ 🟦 ━━━━━━━━━</code>
 <b>📚 <u>How to use Key?</u></b>
 👉 <a href="https://t.me/KS_GCP/53?single">သွားကြည့်ပါ</a> <b>🔑✨</b>
-
 <i>🚀 Powered by @KS_GCP | Stay secure & fast!</i>
 EOF
 )
