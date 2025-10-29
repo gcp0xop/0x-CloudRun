@@ -244,19 +244,14 @@ banner "📣 Step 10 — Telegram Notify"
 
 MSG=$(cat <<EOF
 <b>🚀 <u> **GCP Server Activated!** !</u>🚀 </b>
-<code>━━━━━━━━━ 🟪 ━━━━━━━━━</code>
-<b>📊 <u>Service Info</u></b>
-<b>🔑 <u>Trojan Access Key</u></b>
+<code>━━━━━━━━━🟢━━━━━━━━━</code>
 <pre><code>${URI}</code></pre>
 
-<b>⏳ <u>GCP END TIME</u></b>
 <blockquote>
+<b>⏳ <u>GCP END TIME</u></b>
 <b>🟢 Start:</b> <code>${START_LOCAL}</code>
 <b>🔴 End:</b> <code>${END_LOCAL}</code>
 </blockquote>
-<code>━━━━━━━━━ 🟦 ━━━━━━━━━</code>
-<b>📚 <u>How to use Key?</u></b>
-👉 <a href="https://t.me/KS_GCP/53?single">သွားကြည့်ပါ</a> <b>🔑✨</b>
 <i>🚀 Powered by @KS_GCP | Stay secure & fast!</i>
 EOF
 )
