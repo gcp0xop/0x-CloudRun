@@ -184,7 +184,7 @@ ok "Region: ${REGION}"
 # =================== Step 5: Resources ===================
 banner "🧮 Step 5 — Resources"
 CPU="2"
-MEMORY="2Gi"
+MEMORY="4Gi"
 ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
 
 # =================== Step 6: Service Name ===================
@@ -246,7 +246,6 @@ MSG=$(cat <<EOF
 <b>🚀 <u> **GCP Server Activated!** !</u>🚀 </b>
 <code>━━━━━━━━━🟢━━━━━━━━━</code>
 <pre><code>${URI}</code></pre>
-
 <blockquote>
 <b>⏳ <u>GCP END TIME</u></b>
 <b>🟢 Start:</b> <code>${START_LOCAL}</code>
