@@ -76,7 +76,6 @@ run_with_progress() {
   fi
 }
 
-
 # =================== Step 1: Telegram Config ===================
 banner "🚀 Step 1 — Telegram Setup"
 TELEGRAM_TOKEN="${TELEGRAM_TOKEN:-}"
@@ -179,9 +178,9 @@ echo "[Docker Hidden] ${IMAGE}" >>"$LOG_FILE"
 
 # =================== Step 4: Region ===================
 banner "🌍 Step 4 — Region"
-echo "1) 🇸🇬 Singapore (asia-southeast1)"
-REGION="asia-southeast1"
-ok "Region: ${REGION} (Optimized for performance)"
+echo "1) 🇺🇸 US (us-central1)"
+REGION="us-central1"
+ok "Region: ${REGION} (Reverted)"
 
 # =================== Step 5: Resources ===================
 banner "🧮 Step 5 — Resources"
@@ -246,7 +245,7 @@ URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2F0x&security=tls&host
 banner "📣 Step 10 — Telegram Notify"
 
 MSG=$(cat <<EOF
-<b>🚀 <u> *GCP Server Activated!* </u>🚀 </b>
+<b>🚀 <u> **GCP Server Activated!** !</u>🚀 </b>
 <code>━━━━━━━━━━━━━━━━━━</code>
 <pre><code>${URI}</code></pre>
 <blockquote>
