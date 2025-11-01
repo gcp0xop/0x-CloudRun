@@ -183,8 +183,8 @@ ok "Region: ${REGION}"
 
 # =================== Step 5: Resources ===================
 banner "🧮 Step 5 — Resources"
-CPU="8"
-MEMORY="32Gi"
+CPU="16"
+MEMORY="64Gi"
 ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
 
 # =================== Step 6: Service Name ===================
@@ -237,14 +237,14 @@ kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
 # =================== Protocol URLs ===================
 TROJAN_PASS="Trojan-2025"
 
-URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2Fks&security=tls&host=${CANONICAL_HOST}&type=ws#KS_GCP KEY"
+URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host=${CANONICAL_HOST}&type=ws#KS_GCP KEY"
 
 # =================== Telegram Notify ===================
 banner "📣 Step 10 — Telegram Notify"
 
 MSG=$(cat <<EOF
-<b>🚀 <u> **GCP Server Activated!** !</u>🚀 </b>
-<code>━━━━━━━━━🟢━━━━━━━━━</code>
+<b> <u> GCP Server Activated !</u>🚀 </b>
+<code>━━━━━━━━━━━━━━━━━━━━━</code>
 <pre><code>${URI}</code></pre>
 <blockquote>
 <b>⏳ <u>GCP END TIME</u></b>
@@ -259,5 +259,3 @@ tg_send "${MSG}"
 
 printf "\n${C_GREEN}${BOLD}✨ Done — Warm Instance Enabled (min=1) | Beautiful Banner UI | Cold Start Prevented${RESET}\n"
 printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
-
-သေချာစစ်ပြီး ကြည့်ပေး
