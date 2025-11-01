@@ -59,7 +59,8 @@ run_with_progress() {
       pct=$(( pct + step ))
       (( pct > 95 )) && pct=95
       printf "\r🌀 %s... [%s%%]" "$label" "$pct"
-      sleep "$(awk -v r=$RANDDOM 'BEGIN{s=0.08+(r%7)/100; printf "%.2f", s }')"
+      # ✅ FIXED: Changed RANDDOM to RANDOM
+      sleep "$(awk -v r=$RANDOM 'BEGIN{s=0.08+(r%7)/100; printf "%.2f", s }')"
     done
     wait "$pid"; local rc=$?
     printf "\r"
@@ -74,6 +75,7 @@ run_with_progress() {
     wait "$pid"
   fi
 }
+
 
 # =================== Step 1: Telegram Config ===================
 banner "🚀 Step 1 — Telegram Setup"
