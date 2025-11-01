@@ -43,7 +43,7 @@ warn(){ printf "${C_ORG}⚠${RESET} %s\n" "$1"; }
 err(){  printf "${C_RED}✘${RESET} %s\n" "$1"; }
 kv(){   printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"; }
 
-printf "\n${C_CYAN}${BOLD}🚀 0x Cloud Run — One-Click Deploy${RESET} ${C_GREY}(Trojan WS Only, CPU=MAX, Mem=MAX)${RESET}\n"
+printf "\n${C_CYAN}${BOLD}🚀 0x Cloud Run — One-Click Deploy${RESET} ${C_GREY}(Trojan WS Only, CPU=2, Mem=2Gi)${RESET}\n"
 hr
 
 # =================== Random progress spinner ===================
@@ -59,7 +59,6 @@ run_with_progress() {
       pct=$(( pct + step ))
       (( pct > 95 )) && pct=95
       printf "\r🌀 %s... [%s%%]" "$label" "$pct"
-      # ✅ FIXED: Changed RANDDOM to RANDOM
       sleep "$(awk -v r=$RANDOM 'BEGIN{s=0.08+(r%7)/100; printf "%.2f", s }')"
     done
     wait "$pid"; local rc=$?
@@ -180,20 +179,20 @@ echo "[Docker Hidden] ${IMAGE}" >>"$LOG_FILE"
 banner "🌍 Step 4 — Region"
 echo "1) 🇺🇸 US (us-central1)"
 REGION="us-central1"
-ok "Region: ${REGION} (Reverted)"
+ok "Region: ${REGION}"
 
 # =================== Step 5: Resources ===================
 banner "🧮 Step 5 — Resources"
 CPU="8"
 MEMORY="32Gi"
-ok "CPU/Mem: ${CPU} vCPU / ${MEMORY} (Cloud Run MAX)"
+ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
 
 # =================== Step 6: Service Name ===================
 banner "🪪 Step 6 — Service Name"
 SERVICE="ksgcp"
 TIMEOUT="${TIMEOUT:-3600}"
 PORT="${PORT:-8080}"
-echo "Service name: ${SERVICE} (lowercase required)"
+echo "Service name: ${SERVICE} (fixed)"
 ok "Service: ${SERVICE}"
 
 # =================== Timezone Setup ===================
@@ -225,7 +224,6 @@ run_with_progress "Deploying ${SERVICE}" \
     --allow-unauthenticated \
     --port="$PORT" \
     --min-instances=1 \
-    --concurrency=10 \
     --quiet
 
 # =================== Result ===================
@@ -239,14 +237,14 @@ kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
 # =================== Protocol URLs ===================
 TROJAN_PASS="Trojan-2025"
 
-URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2F0x&security=tls&host=${CANONICAL_HOST}&type=ws#KS_GCP_KEY_0x"
+URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2Fks&security=tls&host=${CANONICAL_HOST}&type=ws#KS_GCP KEY"
 
 # =================== Telegram Notify ===================
 banner "📣 Step 10 — Telegram Notify"
 
 MSG=$(cat <<EOF
 <b>🚀 <u> **GCP Server Activated!** !</u>🚀 </b>
-<code>━━━━━━━━━━━━━━━━━━</code>
+<code>━━━━━━━━━🟢━━━━━━━━━</code>
 <pre><code>${URI}</code></pre>
 <blockquote>
 <b>⏳ <u>GCP END TIME</u></b>
@@ -259,5 +257,7 @@ EOF
 
 tg_send "${MSG}"
 
-printf "\n${C_GREEN}${BOLD}✨ Done — Warm Instance Enabled (min=1) | Optimized for MAX Performance ${RESET}\n"
+printf "\n${C_GREEN}${BOLD}✨ Done — Warm Instance Enabled (min=1) | Beautiful Banner UI | Cold Start Prevented${RESET}\n"
 printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
+
+သေချာစစ်ပြီး ကြည့်ပေး
