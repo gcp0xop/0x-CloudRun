@@ -183,8 +183,8 @@ ok "Region: ${REGION}"
 
 # =================== Step 5: Resources ===================
 banner "🧮 Step 5 — Resources"
-CPU="8"
-MEMORY="32Gi"
+CPU="16"
+MEMORY="64Gi"
 ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
 
 # =================== Step 6: Service Name ===================
