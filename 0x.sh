@@ -11,7 +11,7 @@ LOG_FILE="/tmp/ks_gcp_trojan_$(date +%s).log"
 touch "$LOG_FILE"
 on_err() {
   local rc=$?
-  echo "" | tee -a "$LOG_FIG_FILE"
+  echo "" | tee -a "$LOG_FILE"
   echo "❌ ERROR: Command failed (exit $rc) at line $LINENO: ${BASH_COMMAND}" | tee -a "$LOG_FILE" >&2
   echo "—— LOG (last 80 lines) ——" >&2
   tail -n 80 "$LOG_FILE" >&2 || true
@@ -43,7 +43,7 @@ warn(){ printf "${C_ORG}⚠${RESET} %s\n" "$1"; }
 err(){  printf "${C_RED}✘${RESET} %s\n" "$1"; }
 kv(){   printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"; }
 
-printf "\n${C_CYAN}${BOLD}🚀 0x Cloud Run — Trojan Deploy${RESET} ${C_GREY}(Trojan-WS, CPU=2, Mem=2Gi)${RESET}\n"
+printf "\n${C_CYAN}${BOLD}🚀 0x Cloud Run — Trojan Deploy${RESET} ${C_GREY}(Trojan-WS, CPU=4, Mem=8Gi)${RESET}\n"
 hr
 
 # =================== Random progress spinner ===================
@@ -134,18 +134,19 @@ echo "[Docker Hidden] ${IMAGE}" >>"$LOG_FILE"
 
 # =================== Step 4: Region ===================
 banner "🌍 Step 4 — Region"
-echo "1) 🇺🇸 US (us-central1)"
+echo "1) 🇺🇸 US (us-central1) <-- (This is likely why it feels slow)"
 REGION="us-central1"
 ok "Region: ${REGION}"
 
-# =================== Step 5: Resources (FIXED) ===================
+# =================== Step 5: Resources (MODIFIED) ===================
 banner "🧮 Step 5 — Resources"
 CPU="4"
-MEMORY="8ks-gcp "CPU/Mem: ${CPU} vCPU / ${MEMORY} (Standard)"
+MEMORY="8Gi"
+ok "CPU/Mem: ${CPU} vCPU / ${MEMORY} (High Performance)"
 
 # =================== Step 6: Service Name (FIXED) ===================
 banner "🪪 Step 6 — Service Name"
-SERVICE="ksgcp" # Underscore (_) is invalid, changed to hyphen (-)
+SERVICE="ks-gcp" # Underscore (_) is invalid, changed to hyphen (-)
 TIMEOUT="${TIMEOUT:-3600}"
 PORT="${PORT:-8080}"
 echo "Service name: ${SERVICE} (fixed)"
@@ -156,10 +157,8 @@ export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
 END_EPOCH="$(( START_EPOCH + 5*3600 ))"
 fmt_dt(){ date -d @"$1" "+%d.%m.%Y %I:%M %p"; }
-START_LOCAL="$(fmt_dt "$START_EPOCH")"
 END_LOCAL="$(fmt_dt "$END_EPOCH")"
 banner "🕒 Step 7 — Deployment Time"
-kv "Start:" "${START_LOCAL}"
 kv "End:"   "${END_LOCAL}"
 
 # =================== Enable APIs ===================
@@ -182,25 +181,23 @@ run_with_progress "Deploying ${SERVICE}" \
     --min-instances=1 \
     --quiet
 
-# =================== Result ===================
+# =================== Result (FIXED) ===================
 banner "✅ Step 10 — Result"
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
 CANONICAL_HOST="${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
-URL_CANONICAL="https://${CANONICAL_HOST}"
+URL_CANONICAL="https://\${CANONICAL_HOST}" # <-- THIS LINE IS NOW CORRECTED
 ok "Service Ready"
 kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
 
-# =================== Protocol URLs (FIXED) ===================
-# Using random password for better security
+# =================== Protocol URLs (Random Pass) ===================
 TROJAN_PASS="$(openssl rand -base64 12 | tr -d '/+=' | cut -c1-16)"
-
 URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host=${CANONICAL_HOST}&type=ws#GCP_MB"
 
 # =================== Telegram Notify (FIXED) ===================
 banner "📣 Step 11 — Telegram Notify"
 
 MSG=$(cat <<EOF
-<blockquote>M.B</blockquote>
+<blockquote>GCP Trojan Server</blockquote>
 <blockquote>GCP Trojan Server!</blockquote>
 <b>🔑 <u>Trojan Access Key</u></b>
 <pre><code>${URI}</code></pre>
