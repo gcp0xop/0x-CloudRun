@@ -243,12 +243,8 @@ URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host
 banner "📣 Step 10 — Telegram Notify"
 
 MSG=$(cat <<EOF
-<blockquote>
 <b> <u> MYTEL4G-BYPASS </u> </b>
-</blockquote>
-<blockquote>
 <code>━GCP V2ray KEY━</code>
-</blockquote>
 <pre><code>${URI}</code></pre>
 <blockquote>
 <b>⏳ <u>GCP END TIME</u></b>
