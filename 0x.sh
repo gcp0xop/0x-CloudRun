@@ -184,7 +184,7 @@ ok "Region: ${REGION}"
 # =================== Step 5: Resources ===================
 banner "🧮 Step 5 — Resources"
 CPU="8"
-MEMORY="32Gi"
+MEMORY="32"
 ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
 
 # =================== Step 6: Service Name ===================
@@ -243,15 +243,19 @@ URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host
 banner "📣 Step 10 — Telegram Notify"
 
 MSG=$(cat <<EOF
-<b> <u> GCP Server Activated !</u>🚀 </b>
-<code>━━━━━━━━━━━━━━━━━━━━━</code>
+<blockquote>
+<b> <u> MYTEL4G-BYPASS </u> </b>
+</blockquote>
+<blockquote>
+<code>━GCP V2ray KEY━</code>
+</blockquote>
 <pre><code>${URI}</code></pre>
 <blockquote>
 <b>⏳ <u>GCP END TIME</u></b>
 <b>🟢 Start:</b> <code>${START_LOCAL}</code>
 <b>🔴 End:</b> <code>${END_LOCAL}</code>
 </blockquote>
-<i>🚀 Powered by @KS_GCP | Stay secure & fast!</i>
+<i>🚀 Powered by @KS_GCP </i>
 EOF
 )
 
