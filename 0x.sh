@@ -7,7 +7,7 @@ if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
 fi
 
 # ===== Logging & error handler =====
-LOG_FILE="/tmp/ks_gcp_vless_$(date +%s).log"
+LOG_FILE="/tmp/ks_gcp_trojan_$(date +%s).log"
 touch "$LOG_FILE"
 on_err() {
   local rc=$?
@@ -43,7 +43,7 @@ warn(){ printf "${C_ORG}⚠${RESET} %s\n" "$1"; }
 err(){  printf "${C_RED}✘${RESET} %s\n" "$1"; }
 kv(){   printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"; }
 
-printf "\n${C_CYAN}${BOLD}🚀 0x Cloud Run — VLESS Deploy${RESET} ${C_GREY}(VLESS-WS, CPU=8, Mem=16Gi)${RESET}\n"
+printf "\n${C_CYAN}${BOLD}🚀 0x Cloud Run — Trojan Deploy${RESET} ${C_GREY}(Trojan-WS, CPU=2, Mem=2Gi)${RESET}\n"
 hr
 
 # =================== Random progress spinner ===================
@@ -124,11 +124,11 @@ fi
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
 ok "Project Loaded: ${PROJECT}"
 
-# =================== Step 3: Protocol (VLESS) ===================
+# =================== Step 3: Protocol (Trojan) ===================
 banner "🧩 Step 3 — Select Protocol"
-PROTO="vless-ws"
-IMAGE="zdypro/vless-ws:latest"
-ok "Protocol selected: VLESS-WS"
+PROTO="trojan-ws"
+IMAGE="docker.io/n4pro/tr:latest"
+ok "Protocol selected: TROJAN-WS"
 kv "Docker Image:" "${IMAGE}"
 
 # =================== Step 4: Region ===================
@@ -137,46 +137,37 @@ echo "1) 🇺🇸 US (us-central1)"
 REGION="us-central1"
 ok "Region: ${REGION}"
 
-# =================== Step 5: Resources (MODIFIED) ===================
+# =================== Step 5: Resources (Reverted) ===================
 banner "🧮 Step 5 — Resources"
-CPU="8"
-MEMORY="16Gi"
-ok "CPU/Mem: ${CPU} vCPU / ${MEMORY} (High Performance)"
+CPU="6"
+MEMORY="12Gi"
+ok "CPU/Mem: ${CPU} vCPU / ${MEMORY} (Default)"
 
 # =================== Step 6: Service Name ===================
 banner "🪪 Step 6 — Service Name"
-SERVICE="ksgcp-vless"
+SERVICE="ksgcp"
 TIMEOUT="${TIMEOUT:-3600}"
 PORT="${PORT:-8080}"
 echo "Service name: ${SERVICE} (fixed)"
 ok "Service: ${SERVICE}"
-
-# =================== Step 7: VLESS Config ===================
-banner "🔩 Step 7 — VLESS Config"
-VLESS_UUID="$(cat /proc/sys/kernel/random/uuid)"
-WS_PATH="/N4"
-ok "VLESS UUID: ${VLESS_UUID}"
-ok "VLESS Path: ${WS_PATH}"
 
 # =================== Timezone Setup ===================
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
 END_EPOCH="$(( START_EPOCH + 5*3600 ))"
 fmt_dt(){ date -d @"$1" "+%d.%m.%Y %I:%M %p"; }
-START_LOCAL="$(fmt_dt "$START_EPOCH")" # We calculate it, but don't show it in TG
 END_LOCAL="$(fmt_dt "$END_EPOCH")"
-banner "🕒 Step 8 — Deployment Time"
-kv "Start:" "${START_LOCAL}"
+banner "🕒 Step 7 — Deployment Time"
 kv "End:"   "${END_LOCAL}"
 
 # =================== Enable APIs ===================
-banner "⚙️ Step 9 — Enable APIs"
+banner "⚙️ Step 8 — Enable APIs"
 run_with_progress "Enabling CloudRun & Build APIs" \
   gcloud services enable run.googleapis.com cloudbuild.googleapis.com --quiet
 
 # =================== Deploy ===================
-banner "🚀 Step 10 — Deploying to Cloud Run"
-run_with_progress "Deploying ${SERVICE} (VLESS)" \
+banner "🚀 Step 9 — Deploying to Cloud Run"
+run_with_progress "Deploying ${SERVICE} (Trojan)" \
   gcloud run deploy "$SERVICE" \
     --image="$IMAGE" \
     --platform=managed \
@@ -187,32 +178,35 @@ run_with_progress "Deploying ${SERVICE} (VLESS)" \
     --allow-unauthenticated \
     --port="$PORT" \
     --min-instances=1 \
-    --set-env-vars="UUID=${VLESS_UUID},WS_PATH=${WS_PATH}" \
     --quiet
 
 # =================== Result ===================
-banner "✅ Step 11 — Result"
+banner "✅ Step 10 — Result"
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
 CANONICAL_HOST="${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
-URL_CANONICAL="https://S{CANONICAL_HOST}"
+URL_CANONICAL="https://${CANONICAL_HOST}"
 ok "Service Ready"
 kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
 
-# =================== Protocol URLs (VLESS) ===================
-URI="vless://${VLESS_UUID}@vpn.googleapis.com:443?path=%2FN4&security=tls&host=${CANONICAL_HOST}&type=ws#Vless-WS"
+# =================== Protocol URLs (Trojan) ===================
+# Generate a random password for better security
+TROJAN_PASS="$(openssl rand -base64 12 | tr -d '/+=' | cut -c1-16)"
+URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host=${CANONICAL_HOST}&type=ws#Trojan-WS"
 
 # =================== Telegram Notify (FINAL UI) ===================
-banner "📣 Step 12 — Telegram Notify"
+banner "📣 Step 11 — Telegram Notify"
 
 MSG=$(cat <<EOF
-<blockquote>**MYTEL 4G BYPASS **</blockquote>
-<blockquote>**GCP VLESS Server**</blockquote>
+<blockquote>**GCP Trojan Server**</blockquote>
+<blockquote>**Activated!**</blockquote>
+
 <pre><code>${URI}</code></pre>
+
 <blockquote>🔴 **End:** <code>${END_LOCAL}</code></blockquote>
 EOF
 )
 
 tg_send "${MSG}"
 
-printf "\n${C_GREEN}${BOLD}✨ Done — VLESS Deployed (${CPU}vCPU/${MEMORY}) | Warm Instance Enabled (min=1)${RESET}\n"
+printf "\n${C_GREEN}${BOLD}✨ Done — Trojan Deployed (${CPU}vCPU/${MEMORY}) | Warm Instance Enabled (min=1)${RESET}\n"
 printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
