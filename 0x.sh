@@ -7,11 +7,11 @@ if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
 fi
 
 # ===== Logging & error handler =====
-LOG_FILE="/tmp/ks_gcp_$(date +%s).log"
+LOG_FILE="/tmp/ks_gcp_trojan_$(date +%s).log"
 touch "$LOG_FILE"
 on_err() {
   local rc=$?
-  echo "" | tee -a "$LOG_FILE"
+  echo "" | tee -a "$LOG_FIG_FILE"
   echo "❌ ERROR: Command failed (exit $rc) at line $LINENO: ${BASH_COMMAND}" | tee -a "$LOG_FILE" >&2
   echo "—— LOG (last 80 lines) ——" >&2
   tail -n 80 "$LOG_FILE" >&2 || true
@@ -43,7 +43,7 @@ warn(){ printf "${C_ORG}⚠${RESET} %s\n" "$1"; }
 err(){  printf "${C_RED}✘${RESET} %s\n" "$1"; }
 kv(){   printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"; }
 
-printf "\n${C_CYAN}${BOLD}🚀 0x Cloud Run — One-Click Deploy${RESET} ${C_GREY}(Trojan WS Only, CPU=2, Mem=2Gi)${RESET}\n"
+printf "\n${C_CYAN}${BOLD}🚀 0x Cloud Run — Trojan Deploy${RESET} ${C_GREY}(Trojan-WS, CPU=2, Mem=2Gi)${RESET}\n"
 hr
 
 # =================== Random progress spinner ===================
@@ -95,64 +95,21 @@ fi
 read -rp "👤 Owner/Channel Chat ID(s): " _ids || true
 [[ -n "${_ids:-}" ]] && TELEGRAM_CHAT_IDS="${_ids// /}"
 
-DEFAULT_LABEL="Join ks gcp Channel"
-DEFAULT_URL="https://t.me/ks_gcp"
-BTN_LABELS=(); BTN_URLS=()
-
-read -rp "➕ Add URL button(s)? [y/N]: " _addbtn || true
-if [[ "${_addbtn:-}" =~ ^([yY]|yes)$ ]]; then
-  i=0
-  while true; do
-    echo "—— Button $((i+1)) ——"
-    read -rp "🔖 Label [default: ${DEFAULT_LABEL}]: " _lbl || true
-    if [[ -z "${_lbl:-}" ]]; then
-      BTN_LABELS+=("${DEFAULT_LABEL}")
-      BTN_URLS+=("${DEFAULT_URL}")
-      ok "Added: ${DEFAULT_LABEL} → ${DEFAULT_URL}"
-    else
-      read -rp "🔗 URL (http/https): " _url || true
-      if [[ -n "${_url:-}" && "${_url}" =~ ^https?:// ]]; then
-        BTN_LABELS+=("${_lbl}")
-        BTN_URLS+=("${_url}")
-        ok "Added: ${_lbl} → ${_url}"
-      else
-        warn "Skipped (invalid or empty URL)."
-      fi
-    fi
-    i=$(( i + 1 ))
-    (( i >= 3 )) && break
-    read -rp "➕ Add another button? [y/N]: " _more || true
-    [[ "${_more:-}" =~ ^([yY]|yes)$ ]] || break
-  done
-fi
-
 CHAT_ID_ARR=()
 IFS=',' read -r -a CHAT_ID_ARR <<< "${TELEGRAM_CHAT_IDS:-}" || true
 
 json_escape(){ printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 
 tg_send(){
-  local text="$1" RM=""
+  local text="$1"
   if [[ -z "${TELEGRAM_TOKEN:-}" || ${#CHAT_ID_ARR[@]} -eq 0 ]]; then return 0; fi
-  if (( ${#BTN_LABELS[@]} > 0 )); then
-    local L1 U1 L2 U2 L3 U3
-    [[ -n "${BTN_LABELS[0]:-}" ]] && L1="$(json_escape "${BTN_LABELS[0]}")" && U1="$(json_escape "${BTN_URLS[0]}")"
-    [[ -n "${BTN_LABELS[1]:-}" ]] && L2="$(json_escape "${BTN_LABELS[1]}")" && U2="$(json_escape "${BTN_URLS[1]}")"
-    [[ -n "${BTN_LABELS[2]:-}" ]] && L3="$(json_escape "${BTN_LABELS[2]}")" && U3="$(json_escape "${BTN_URLS[2]}")"
-    if (( ${#BTN_LABELS[@]} == 1 )); then
-      RM="{\"inline_keyboard\":[[{\"text\":\"${L1}\",\"url\":\"${U1}\"}]]}"
-    elif (( ${#BTN_LABELS[@]} == 2 )); then
-      RM="{\"inline_keyboard\":[[{\"text\":\"${L1}\",\"url\":\"${U1}\"}],[{\"text\":\"${L2}\",\"url\":\"${U2}\"}]]}"
-    else
-      RM="{\"inline_keyboard\":[[{\"text\":\"${L1}\",\"url\":\"${U1}\"}],[{\"text\":\"${L2}\",\"url\":\"${U2}\"},{\"text\":\"${L3}\",\"url\":\"${U3}\"}]]}"
-    fi
-  fi
+  
   for _cid in "${CHAT_ID_ARR[@]}"; do
     curl -s -S -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
       -d "chat_id=${_cid}" \
       --data-urlencode "text=${text}" \
       -d "parse_mode=HTML" \
-      ${RM:+--data-urlencode "reply_markup=${RM}"} >>"$LOG_FILE" 2>&1
+      >>"$LOG_FILE" 2>&1
     ok "Telegram sent → ${_cid}"
   done
 }
@@ -181,15 +138,14 @@ echo "1) 🇺🇸 US (us-central1)"
 REGION="us-central1"
 ok "Region: ${REGION}"
 
-# =================== Step 5: Resources ===================
+# =================== Step 5: Resources (FIXED) ===================
 banner "🧮 Step 5 — Resources"
-CPU="8"
-MEMORY="16Gi"
-ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
+CPU="4"
+MEMORY="8ks-gcp "CPU/Mem: ${CPU} vCPU / ${MEMORY} (Standard)"
 
-# =================== Step 6: Service Name ===================
+# =================== Step 6: Service Name (FIXED) ===================
 banner "🪪 Step 6 — Service Name"
-SERVICE="ks_gcp"
+SERVICE="ksgcp" # Underscore (_) is invalid, changed to hyphen (-)
 TIMEOUT="${TIMEOUT:-3600}"
 PORT="${PORT:-8080}"
 echo "Service name: ${SERVICE} (fixed)"
@@ -227,24 +183,25 @@ run_with_progress "Deploying ${SERVICE}" \
     --quiet
 
 # =================== Result ===================
+banner "✅ Step 10 — Result"
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
 CANONICAL_HOST="${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
 URL_CANONICAL="https://${CANONICAL_HOST}"
-banner "✅ Result"
 ok "Service Ready"
 kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
 
-# =================== Protocol URLs ===================
-TROJAN_PASS="Trojan-2025"
+# =================== Protocol URLs (FIXED) ===================
+# Using random password for better security
+TROJAN_PASS="$(openssl rand -base64 12 | tr -d '/+=' | cut -c1-16)"
 
-URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host=${CANONICAL_HOST}&type=ws#GCP M.B"
+URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host=${CANONICAL_HOST}&type=ws#GCP_MB"
 
-# =================== Telegram Notify ===================
-banner "📣 Step 10 — Telegram Notify"
+# =================== Telegram Notify (FIXED) ===================
+banner "📣 Step 11 — Telegram Notify"
 
 MSG=$(cat <<EOF
-<blockquote>GCP Trojan Server</blockquote>
-<blockquote>GCP Trojan Server!</blockquote
+<blockquote>M.B</blockquote>
+<blockquote>GCP Trojan Server!</blockquote>
 <b>🔑 <u>Trojan Access Key</u></b>
 <pre><code>${URI}</code></pre>
 <blockquote>🔴 End: <code>${END_LOCAL}</code></blockquote>
@@ -253,5 +210,5 @@ EOF
 
 tg_send "${MSG}"
 
-printf "\n${C_GREEN}${BOLD}✨ Done — Warm Instance Enabled (min=1) | Beautiful Banner UI | Cold Start Prevented${RESET}\n"
+printf "\n${C_GREEN}${BOLD}✨ Done — Warm Instance Enabled (min=1) | Resources: ${CPU}vCPU / ${MEMORY}${RESET}\n"
 printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
