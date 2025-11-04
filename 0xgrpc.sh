@@ -46,32 +46,15 @@ kv(){   printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"; }
 printf "\n${C_CYAN}${BOLD}🚀 KSGCP Cloud Run — gRPC Deploy${RESET}\n"
 hr
 
-# =================== Random progress spinner ===================
+# =================== Simple progress ===================
 run_with_progress() {
   local label="$1"; shift
-  ( "$@" ) >>"$LOG_FILE" 2>&1 &
-  local pid=$!
-  local pct=5
-  if [[ -t 1 ]]; then
-    printf "\e[?25l"
-    while kill -0 "$pid" 2>/dev/null; do
-      local step=$(( (RANDOM % 9) + 2 ))
-      pct=$(( pct + step ))
-      (( pct > 95 )) && pct=95
-      printf "\r🌀 %s... [%s%%]" "$label" "$pct"
-      sleep "$(awk -v r=$RANDOM 'BEGIN{s=0.08+(r%7)/100; printf "%.2f", s }')"
-    done
-    wait "$pid"; local rc=$?
-    printf "\r"
-    if (( rc==0 )); then
-      printf "✅ %s... [100%%]\n" "$label"
-    else
-      printf "❌ %s failed (see %s)\n" "$label" "$LOG_FILE"
-      return $rc
-    fi
-    printf "\e[?25h"
+  printf "🔄 %s... " "$label"
+  if "$@" >>"$LOG_FILE" 2>&1; then
+    printf "✅\n"
   else
-    wait "$pid"
+    printf "❌\n"
+    return 1
   fi
 }
 
@@ -95,64 +78,19 @@ fi
 read -rp "👤 Owner/Channel Chat ID(s): " _ids || true
 [[ -n "${_ids:-}" ]] && TELEGRAM_CHAT_IDS="${_ids// /}"
 
-DEFAULT_LABEL="Join KSGCP Channel"
-DEFAULT_URL="https://t.me/ksgcp"
-BTN_LABELS=(); BTN_URLS=()
-
-read -rp "➕ Add URL button(s)? [y/N]: " _addbtn || true
-if [[ "${_addbtn:-}" =~ ^([yY]|yes)$ ]]; then
-  i=0
-  while true; do
-    echo "—— Button $((i+1)) ——"
-    read -rp "🔖 Label [default: ${DEFAULT_LABEL}]: " _lbl || true
-    if [[ -z "${_lbl:-}" ]]; then
-      BTN_LABELS+=("${DEFAULT_LABEL}")
-      BTN_URLS+=("${DEFAULT_URL}")
-      ok "Added: ${DEFAULT_LABEL} → ${DEFAULT_URL}"
-    else
-      read -rp "🔗 URL (http/https): " _url || true
-      if [[ -n "${_url:-}" && "${_url}" =~ ^https?:// ]]; then
-        BTN_LABELS+=("${_lbl}")
-        BTN_URLS+=("${_url}")
-        ok "Added: ${_lbl} → ${_url}"
-      else
-        warn "Skipped (invalid or empty URL)."
-      fi
-    fi
-    i=$(( i + 1 ))
-    (( i >= 3 )) && break
-    read -rp "➕ Add another button? [y/N]: " _more || true
-    [[ "${_more:-}" =~ ^([yY]|yes)$ ]] || break
-  done
-fi
-
 CHAT_ID_ARR=()
 IFS=',' read -r -a CHAT_ID_ARR <<< "${TELEGRAM_CHAT_IDS:-}" || true
 
 json_escape(){ printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 
 tg_send(){
-  local text="$1" RM=""
+  local text="$1"
   if [[ -z "${TELEGRAM_TOKEN:-}" || ${#CHAT_ID_ARR[@]} -eq 0 ]]; then return 0; fi
-  if (( ${#BTN_LABELS[@]} > 0 )); then
-    local L1 U1 L2 U2 L3 U3
-    [[ -n "${BTN_LABELS[0]:-}" ]] && L1="$(json_escape "${BTN_LABELS[0]}")" && U1="$(json_escape "${BTN_URLS[0]}")"
-    [[ -n "${BTN_LABELS[1]:-}" ]] && L2="$(json_escape "${BTN_LABELS[1]}")" && U2="$(json_escape "${BTN_URLS[1]}")"
-    [[ -n "${BTN_LABELS[2]:-}" ]] && L3="$(json_escape "${BTN_LABELS[2]}")" && U3="$(json_escape "${BTN_URLS[2]}")"
-    if (( ${#BTN_LABELS[@]} == 1 )); then
-      RM="{\"inline_keyboard\":[[{\"text\":\"${L1}\",\"url\":\"${U1}\"}]]}"
-    elif (( ${#BTN_LABELS[@]} == 2 )); then
-      RM="{\"inline_keyboard\":[[{\"text\":\"${L1}\",\"url\":\"${U1}\"}],[{\"text\":\"${L2}\",\"url\":\"${U2}\"}]]}"
-    else
-      RM="{\"inline_keyboard\":[[{\"text\":\"${L1}\",\"url\":\"${U1}\"}],[{\"text\":\"${L2}\",\"url\":\"${U2}\"},{\"text\":\"${L3}\",\"url\":\"${U3}\"}]]}"
-    fi
-  fi
   for _cid in "${CHAT_ID_ARR[@]}"; do
     curl -s -S -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
       -d "chat_id=${_cid}" \
       --data-urlencode "text=${text}" \
-      -d "parse_mode=HTML" \
-      ${RM:+--data-urlencode "reply_markup=${RM}"} >>"$LOG_FILE" 2>&1
+      -d "parse_mode=HTML" >>"$LOG_FILE" 2>&1
     ok "Telegram sent → ${_cid}"
   done
 }
@@ -180,9 +118,9 @@ ok "Region: ${REGION} (US Central)"
 
 # =================== Step 5: Resources ===================
 banner "🧮 Step 5 — Resources"
-CPU="4"  # Qwiklabs friendly - reduced to 1
-MEMORY="4Gi"  # Qwiklabs friendly - reduced to 1Gi
-ok "CPU/Mem: ${CPU} vCPU / ${MEMORY} (Qwiklabs Optimized)"
+CPU="4"
+MEMORY="4Gi"
+ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
 
 # =================== Step 6: Service Name ===================
 banner "🪪 Step 6 — Service Name"
@@ -219,19 +157,26 @@ run_with_progress "Enabling CloudRun & Build APIs" \
 
 # =================== Deploy ===================
 banner "🚀 Step 9 — Deploying to Cloud Run"
-run_with_progress "Deploying ${SERVICE}" \
-  gcloud run deploy "$SERVICE" \
-    --image="$IMAGE" \
-    --platform=managed \
-    --region="$REGION" \
-    --memory="$MEMORY" \
-    --cpu="$CPU" \
-    --timeout="$TIMEOUT" \
-    --allow-unauthenticated \
-    --port="$PORT" \
-    --min-instances=0 \
-    --max-instances=1 \
-    --quiet
+echo "🔄 Deploying ${SERVICE} (this may take 2-3 minutes)..."
+if gcloud run deploy "$SERVICE" \
+  --image="$IMAGE" \
+  --platform=managed \
+  --region="$REGION" \
+  --memory="$MEMORY" \
+  --cpu="$CPU" \
+  --timeout="$TIMEOUT" \
+  --allow-unauthenticated \
+  --port="$PORT" \
+  --min-instances=0 \
+  --max-instances=1 \
+  --quiet >>"$LOG_FILE" 2>&1; then
+  ok "Deployment successful"
+else
+  err "Deployment failed - check log file: $LOG_FILE"
+  echo "Last 10 lines of log:"
+  tail -10 "$LOG_FILE" >&2
+  exit 1
+fi
 
 # =================== Result ===================
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
@@ -252,17 +197,10 @@ GRPC_LINK="grpc://${GRPC_SNI}:${GRPC_PORT}?serviceName=${GRPC_SERVICE_NAME}&pass
 banner "📣 Step 10 — Telegram Notification"
 
 MSG=$(cat <<EOF
-<blockquote>🚀 GCP gRPC CONFIG</blockquote>
-
+<blockquote>GCP V2RAY KEY</blockquote>
 <code>${GRPC_LINK}</code>
 
-<blockquote>📋 Config Details:</blockquote>
-<code>Server: ${GRPC_SNI}</code>
-<code>Port: ${GRPC_PORT}</code>  
-<code>Service: ${GRPC_SERVICE_NAME}</code>
-<code>Password: ${GRPC_PASS}</code>
-
-<blockquote>⏳ End: <code>${END_LOCAL}</code></blockquote>
+⏳ End: ${END_LOCAL}
 EOF
 )
 
@@ -278,7 +216,7 @@ kv "Server" "${GRPC_SNI}"
 kv "Port" "${GRPC_PORT}"
 kv "Service" "${GRPC_SERVICE_NAME}"
 kv "Password" "${GRPC_PASS}"
-kv "Docker" "${IMAGE}"
+kv "Resources" "${CPU}vCPU ${MEMORY}"
 
-printf "\n${C_GREEN}${BOLD}✨ Done — KSGCP gRPC Deployed Successfully | 1vCPU 1GB | US Central Region${RESET}\n"
+printf "\n${C_GREEN}${BOLD}✨ Done — KSGCP gRPC Deployed Successfully | 4vCPU 4GB | US Central Region${RESET}\n"
 printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
