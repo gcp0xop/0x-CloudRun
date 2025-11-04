@@ -242,10 +242,11 @@ URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host
 banner "📣 Step 10 — Telegram Notification"
 
 MSG=$(cat <<EOF
-<blockquote>GCP Trojan Server</blockquote>
-<blockquote>Activated!</blockquote>
+<blockquote>GCP V2RAY KEY</blockquote>
+<blockquote>Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်!</blockquote>
 <pre><code>${URI}</code></pre>
-<blockquote>🔴 End: <code>${END_LOCAL}</code></blockquote>
+
+<blockquote>⏳ End: <code>${END_LOCAL}</code></blockquote>
 EOF
 )
 
