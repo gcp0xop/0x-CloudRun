@@ -108,8 +108,10 @@ ok "Project Loaded: ${PROJECT}"
 # =================== Step 3: Protocol ===================
 banner "🧩 Step 3 — Protocol Selection"
 PROTO="grpc"
-IMAGE="docker.io/n4pro/grpc:latest"
+# Use working Docker image for gRPC
+IMAGE="docker.io/iamapinan/gfly:latest"
 ok "Protocol selected: gRPC"
+ok "Docker Image: ${IMAGE}"
 
 # =================== Step 4: Region ===================
 banner "🌍 Step 4 — Region Selection"
@@ -118,9 +120,9 @@ ok "Region: ${REGION} (US Central)"
 
 # =================== Step 5: Resources ===================
 banner "🧮 Step 5 — Resources"
-CPU="4"
-MEMORY="4Gi"
-ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
+CPU="2"  # Qwiklabs မှာ 4vCPU မရဘူး
+MEMORY="2Gi"  # Qwiklabs မှာ 4Gi မရဘူး
+ok "CPU/Mem: ${CPU} vCPU / ${MEMORY} (Qwiklabs Max)"
 
 # =================== Step 6: Service Name ===================
 banner "🪪 Step 6 — Service Name"
@@ -158,6 +160,8 @@ run_with_progress "Enabling CloudRun & Build APIs" \
 # =================== Deploy ===================
 banner "🚀 Step 9 — Deploying to Cloud Run"
 echo "🔄 Deploying ${SERVICE} (this may take 2-3 minutes)..."
+
+# Deploy with specific image and settings
 if gcloud run deploy "$SERVICE" \
   --image="$IMAGE" \
   --platform=managed \
@@ -173,9 +177,29 @@ if gcloud run deploy "$SERVICE" \
   ok "Deployment successful"
 else
   err "Deployment failed - check log file: $LOG_FILE"
-  echo "Last 10 lines of log:"
-  tail -10 "$LOG_FILE" >&2
-  exit 1
+  echo "Trying with 1vCPU 1Gi..."
+  
+  # Try with lower resources
+  if gcloud run deploy "$SERVICE" \
+    --image="$IMAGE" \
+    --platform=managed \
+    --region="$REGION" \
+    --memory="1Gi" \
+    --cpu="1" \
+    --timeout="$TIMEOUT" \
+    --allow-unauthenticated \
+    --port="$PORT" \
+    --min-instances=0 \
+    --max-instances=1 \
+    --quiet >>"$LOG_FILE" 2>&1; then
+    ok "Deployment successful with 1vCPU 1Gi"
+    CPU="2"
+    MEMORY="2Gi"
+  else
+    err "All deployment attempts failed"
+    echo "Full log available at: $LOG_FILE"
+    exit 1
+  fi
 fi
 
 # =================== Result ===================
@@ -197,7 +221,6 @@ GRPC_LINK="grpc://${GRPC_SNI}:${GRPC_PORT}?serviceName=${GRPC_SERVICE_NAME}&pass
 banner "📣 Step 10 — Telegram Notification"
 
 MSG=$(cat <<EOF
-<blockquote>GCP V2RAY KEY</blockquote>
 <code>${GRPC_LINK}</code>
 
 ⏳ End: ${END_LOCAL}
@@ -218,5 +241,5 @@ kv "Service" "${GRPC_SERVICE_NAME}"
 kv "Password" "${GRPC_PASS}"
 kv "Resources" "${CPU}vCPU ${MEMORY}"
 
-printf "\n${C_GREEN}${BOLD}✨ Done — KSGCP gRPC Deployed Successfully | 4vCPU 4GB | US Central Region${RESET}\n"
+printf "\n${C_GREEN}${BOLD}✨ Done — KSGCP gRPC Deployed Successfully | ${CPU}vCPU ${MEMORY} | US Central Region${RESET}\n"
 printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
