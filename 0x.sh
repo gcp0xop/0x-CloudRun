@@ -183,7 +183,7 @@ banner "🧮 Step 5 — Resources"
 read -rp "CPU [1/2/4/6/8, default 8]: " _cpu || true
 CPU="${_cpu:-8}"
 read -rp "Memory [512Mi/1Gi/2Gi/4Gi/8Gi/16Gi(default)]: " _mem || true
-MEMORY="${_mem:-16Gi}"
+MEMORY="${_mem:-8Gi}"
 ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
 
 # =================== Step 6: Service Name ===================
