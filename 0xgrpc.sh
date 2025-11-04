@@ -180,12 +180,12 @@ ok "Region: ${REGION} (US Central)"
 
 # =================== Step 5: Resources ===================
 banner "🧮 Step 5 — Resources"
-CPU="2"  # Qwiklabs friendly
-MEMORY="2Gi"  # Qwiklabs friendly
+CPU="4"  # Qwiklabs friendly - reduced to 1
+MEMORY="4Gi"  # Qwiklabs friendly - reduced to 1Gi
 ok "CPU/Mem: ${CPU} vCPU / ${MEMORY} (Qwiklabs Optimized)"
 
-# =================== Step 6: Service Name & Password ===================
-banner "🪪 Step 6 — Service Name & Password"
+# =================== Step 6: Service Name ===================
+banner "🪪 Step 6 — Service Name"
 SERVICE="${SERVICE:-ksgcp-grpc}"
 TIMEOUT="${TIMEOUT:-3600}"
 PORT="${PORT:-8080}"
@@ -193,11 +193,9 @@ PORT="${PORT:-8080}"
 read -rp "🔧 Service name [default: ${SERVICE}]: " _svc || true
 SERVICE="${_svc:-$SERVICE}"
 
-read -rp "🔑 gRPC Password [default: KSGCP-2025]: " _pass || true
-GRPC_PASS="${_pass:-KSGCP-2025}"
-
-read -rp "📡 gRPC Service Name [default: GService]: " _service_name || true
-GRPC_SERVICE_NAME="${_service_name:-GService}"
+# Fixed passwords - no input needed
+GRPC_PASS="KSGCP-2025"
+GRPC_SERVICE_NAME="GService"
 
 ok "Service: ${SERVICE}"
 ok "Password: ${GRPC_PASS}" 
@@ -247,21 +245,6 @@ kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
 GRPC_SNI="${CANONICAL_HOST}"
 GRPC_PORT="443"
 
-# Create gRPC configuration string
-GRPC_CONFIG=$(cat <<EOF
-{
-  "protocol": "grpc",
-  "server": "${GRPC_SNI}",
-  "port": "${GRPC_PORT}",
-  "service_name": "${GRPC_SERVICE_NAME}",
-  "password": "${GRPC_PASS}",
-  "sni": "${GRPC_SNI}",
-  "alpn": ["h2"],
-  "transport": "grpc"
-}
-EOF
-)
-
 # Create shareable gRPC link
 GRPC_LINK="grpc://${GRPC_SNI}:${GRPC_PORT}?serviceName=${GRPC_SERVICE_NAME}&password=${GRPC_PASS}&sni=${GRPC_SNI}#KSGCP-gRPC"
 
@@ -297,5 +280,5 @@ kv "Service" "${GRPC_SERVICE_NAME}"
 kv "Password" "${GRPC_PASS}"
 kv "Docker" "${IMAGE}"
 
-printf "\n${C_GREEN}${BOLD}✨ Done — KSGCP gRPC Deployed Successfully | 2vCPU 2GB | US Central Region${RESET}\n"
+printf "\n${C_GREEN}${BOLD}✨ Done — KSGCP gRPC Deployed Successfully | 1vCPU 1GB | US Central Region${RESET}\n"
 printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
