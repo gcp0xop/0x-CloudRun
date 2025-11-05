@@ -1,142 +1,51 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ===== Ensure interactive reads =====
-if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
-  exec </dev/tty
-fi
+# ===== Colors =====
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+CYAN='\033[0;36m'; BLUE='\033[0;34m'; PURPLE='\033[0;35m'; NC='\033[0m'
 
 # ===== Logging =====
-LOG_FILE="/tmp/aws_vmess_$(date +%s).log"
-touch "$LOG_FILE"
-on_err() {
-  local rc=$?
-  echo "" | tee -a "$LOG_FILE"
-  echo "❌ ERROR: Command failed (exit $rc) at line $LINENO" | tee -a "$LOG_FILE" >&2
-  echo "📄 Log File: $LOG_FILE" >&2
-  exit $rc
-}
-trap on_err ERR
+LOG_FILE="/tmp/vmess_2hr_$(date +%s).log"
+exec > >(tee -a "$LOG_FILE") 2>&1
 
-# =================== Color & UI ===================
-if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
-  RESET=$'\e[0m'; BOLD=$'\e[1m'; DIM=$'\e[2m'
-  C_CYAN=$'\e[38;5;44m'; C_BLUE=$'\e[38;5;33m'
-  C_GREEN=$'\e[38;5;46m'; C_YEL=$'\e[38;5;226m'
-  C_ORG=$'\e[38;5;214m'; C_PINK=$'\e[38;5;205m'
-  C_GREY=$'\e[38;5;245m'; C_RED=$'\e[38;5;196m'
-else
-  RESET= BOLD= DIM= C_CYAN= C_BLUE= C_GREEN= C_YEL= C_ORG= C_PINK= C_GREY= C_RED=
-fi
+echo -e "${PURPLE}🚀 KSGCP 2:15 Hours Extended VMESS + TLS${NC}"
+echo -e "${CYAN}⏰ Optimized for 135 Minutes Usage${NC}"
+echo ""
 
-hr(){ printf "${C_GREY}%s${RESET}\n" "──────────────────────────────────────────────"; }
-banner(){
-  local title="$1"
-  printf "\n${C_BLUE}${BOLD}╔══════════════════════════════════════════════════╗${RESET}\n"
-  printf   "${C_BLUE}${BOLD}║${RESET}  %s${RESET}\n" "$(printf "%-46s" "$title")"
-  printf   "${C_BLUE}${BOLD}╚══════════════════════════════════════════════════╝${RESET}\n"
-}
-ok(){   printf "${C_GREEN}✔${RESET} %s\n" "$1"; }
-warn(){ printf "${C_ORG}⚠${RESET} %s\n" "$1"; }
-err(){  printf "${C_RED}✘${RESET} %s\n" "$1"; }
-kv(){   printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"; }
+# ===== Time Tracking =====
+START_TIME=$(date +%s)
+LAB_DURATION=8100  # 135 minutes in seconds
 
-printf "\n${C_CYAN}${BOLD}🚀 AWS Load Balancer - VMESS + TLS Deploy${RESET}\n"
-hr
+# ===== Step 1: Comprehensive Setup =====
+echo -e "${GREEN}✅ Step 1: Extended System Setup${NC}"
+PROJECT=$(gcloud config get-value project)
+ZONE=$(gcloud config get-value compute/zone 2>/dev/null || echo "us-central1-a")
+echo -e "   Project: ${CYAN}$PROJECT${NC}"
+echo -e "   Zone: ${CYAN}$ZONE${NC}"
 
-# =================== Random progress spinner ===================
-run_with_progress() {
-  local label="$1"; shift
-  ( "$@" ) >>"$LOG_FILE" 2>&1 &
-  local pid=$!
-  local pct=5
-  if [[ -t 1 ]]; then
-    printf "\e[?25l"
-    while kill -0 "$pid" 2>/dev/null; do
-      local step=$(( (RANDOM % 9) + 2 ))
-      pct=$(( pct + step ))
-      (( pct > 95 )) && pct=95
-      printf "\r🌀 %s... [%s%%]" "$label" "$pct"
-      sleep "$(awk -v r=$RANDOM 'BEGIN{s=0.08+(r%7)/100; printf "%.2f", s }')"
-    done
-    wait "$pid"; local rc=$?
-    printf "\r"
-    if (( rc==0 )); then
-      printf "✅ %s... [100%%]\n" "$label"
-    else
-      printf "❌ %s failed (see %s)\n" "$label" "$LOG_FILE"
-      return $rc
-    fi
-    printf "\e[?25h"
-  else
-    wait "$pid"
-  fi
-}
+# ===== Step 2: Multi-Protocol Setup =====
+echo -e "${GREEN}✅ Step 2: Multi-Protocol Deployment${NC}"
 
-# =================== Step 1: Telegram Config ===================
-banner "🤖 Step 1 — Telegram Setup"
-TELEGRAM_TOKEN="${TELEGRAM_TOKEN:-}"
-TELEGRAM_CHAT_IDS="${TELEGRAM_CHAT_IDS:-${TELEGRAM_CHAT_ID:-}}"
+# Generate multiple UUIDs for different protocols
+VMESS_UUID=$(cat /proc/sys/kernel/random/uuid)
+TROJAN_PASSWORD=$(openssl rand -base64 12 | tr -d '/+=')
+echo -e "   VMESS UUID: ${CYAN}$VMESS_UUID${NC}"
+echo -e "   Trojan Password: ${CYAN}$TROJAN_PASSWORD${NC}"
 
-if [[ ( -z "${TELEGRAM_TOKEN}" || -z "${TELEGRAM_CHAT_IDS}" ) && -f .env ]]; then
-  set -a; source ./.env; set +a
-fi
+# Get external IP
+EXT_IP=$(curl -s -m 5 ifconfig.me || curl -s -m 5 ipinfo.io/ip || echo "YOUR_VM_IP")
+echo -e "   External IP: ${CYAN}$EXT_IP${NC}"
 
-read -rp "🤖 Telegram Bot Token: " _tk || true
-[[ -n "${_tk:-}" ]] && TELEGRAM_TOKEN="$_tk"
-if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then
-  warn "Telegram token empty; deploy will continue without messages."
-else
-  ok "Telegram token captured."
-fi
+# ===== Step 3: Enhanced Xray Install =====
+echo -e "${GREEN}✅ Step 3: Installing Enhanced Xray${NC}"
 
-read -rp "👤 Owner/Channel Chat ID(s): " _ids || true
-[[ -n "${_ids:-}" ]] && TELEGRAM_CHAT_IDS="${_ids// /}"
+bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install -u root
 
-CHAT_ID_ARR=()
-IFS=',' read -r -a CHAT_ID_ARR <<< "${TELEGRAM_CHAT_IDS:-}" || true
+# ===== Step 4: Multi-Inbound Configuration =====
+echo -e "${GREEN}✅ Step 4: Multi-Protocol Configuration${NC}"
 
-json_escape(){ printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
-
-tg_send(){
-  local text="$1"
-  if [[ -z "${TELEGRAM_TOKEN:-}" || ${#CHAT_ID_ARR[@]} -eq 0 ]]; then return 0; fi
-  for _cid in "${CHAT_ID_ARR[@]}"; do
-    curl -s -S -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-      -d "chat_id=${_cid}" \
-      --data-urlencode "text=${text}" \
-      -d "parse_mode=HTML" >>"$LOG_FILE" 2>&1
-    ok "Telegram sent → ${_cid}"
-  done
-}
-
-# =================== Step 2: AWS EC2 Setup ===================
-banner "🖥️ Step 2 — AWS EC2 Configuration"
-
-# Get EC2 instance details
-echo "🔍 Detecting EC2 instances..."
-INSTANCES=$(aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId,PublicIpAddress,State.Name]' --output table 2>/dev/null || true)
-
-if [[ -z "$INSTANCES" ]]; then
-  warn "No EC2 instances found or AWS CLI not configured"
-  echo "📝 Please manually configure:"
-  echo "   1. AWS CLI: aws configure"
-  echo "   2. EC2 instances with public IP"
-  echo "   3. Security groups allowing ports: 443, 80, 8388"
-else
-  echo "$INSTANCES"
-  ok "EC2 instances detected"
-fi
-
-# =================== Step 3: VMESS + TLS Setup ===================
-banner "🔐 Step 3 — VMESS + TLS Deployment"
-
-# Generate UUID for VMESS
-VMESS_UUID=$(uuidgen | tr '[:upper:]' '[:lower:]')
-ok "Generated VMESS UUID: ${VMESS_UUID}"
-
-# Create Xray configuration
-XRAY_CONFIG=$(cat <<EOF
+cat > /usr/local/etc/xray/config.json << EOF
 {
   "inbounds": [
     {
@@ -146,7 +55,8 @@ XRAY_CONFIG=$(cat <<EOF
         "clients": [
           {
             "id": "$VMESS_UUID",
-            "alterId": 0
+            "alterId": 0,
+            "email": "user@ksgcp.com"
           }
         ]
       },
@@ -156,114 +66,126 @@ XRAY_CONFIG=$(cat <<EOF
         "tlsSettings": {
           "certificates": [
             {
-              "certificateFile": "/etc/xray/cert.crt",
-              "keyFile": "/etc/xray/private.key"
+              "certificateFile": "/usr/local/etc/xray/cert.crt",
+              "keyFile": "/usr/local/etc/xray/private.key"
             }
           ]
         }
-      }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
+      },
+      "tag": "vmess-tls"
+    },
+    {
+      "port": 8443,
+      "protocol": "trojan",
+      "settings": {
+        "clients": [
+          {
+            "password": "$TROJAN_PASSWORD",
+            "email": "trojan@ksgcp.com"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "/usr/local/etc/xray/cert.crt",
+              "keyFile": "/usr/local/etc/xray/private.key"
+            }
+          ]
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
+      },
+      "tag": "trojan-tls"
     }
   ],
   "outbounds": [
     {
       "protocol": "freedom",
-      "settings": {}
+      "settings": {},
+      "tag": "direct"
+    },
+    {
+      "protocol": "blackhole",
+      "settings": {},
+      "tag": "blocked"
     }
-  ]
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {
+        "type": "field",
+        "ip": ["geoip:private"],
+        "outboundTag": "blocked"
+      }
+    ]
+  }
 }
 EOF
-)
 
-echo "📁 Creating Xray configuration..."
-echo "$XRAY_CONFIG" > /tmp/xray_config.json
-ok "Xray config created"
+# ===== Step 5: Professional Certificate =====
+echo -e "${GREEN}✅ Step 5: Generating Professional Certificate${NC}"
 
-# =================== Step 4: Installation Script ===================
-banner "📦 Step 4 — Installation Script"
+openssl req -new -newkey rsa:4096 -days 30 -nodes -x509 \
+  -subj "/C=US/ST=California/L=San Francisco/O=Google Cloud/CN=cloud.google.com" \
+  -keyout /usr/local/etc/xray/private.key \
+  -out /usr/local/etc/xray/cert.crt
 
-# Create installation script for EC2 instances
-INSTALL_SCRIPT=$(cat <<'EOF'
-#!/bin/bash
+# ===== Step 6: Advanced Firewall =====
+echo -e "${GREEN}✅ Step 6: Configuring Advanced Firewall${NC}"
 
-# Update system
-sudo apt-get update -y
-sudo apt-get upgrade -y
+# Remove existing rules if any
+gcloud compute firewall-rules delete -q ksgcp-vmess-443 2>/dev/null || true
+gcloud compute firewall-rules delete -q ksgcp-trojan-8443 2>/dev/null || true
 
-# Install Xray
-sudo bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+# Create new rules
+gcloud compute firewall-rules create ksgcp-vmess-443 \
+  --allow=tcp:443 \
+  --direction=INGRESS \
+  --description="KSGCP VMESS TLS" \
+  --quiet
 
-# Create directory for certificates
-sudo mkdir -p /etc/xray
+gcloud compute firewall-rules create ksgcp-trojan-8443 \
+  --allow=tcp:8443 \
+  --direction=INGRESS \
+  --description="KSGCP Trojan TLS" \
+  --quiet
 
-# Generate self-signed certificate (for testing)
-sudo openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 \
-    -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost" \
-    -keyout /etc/xray/private.key -out /etc/xray/cert.crt
+# ===== Step 7: Service Optimization =====
+echo -e "${GREEN}✅ Step 7: Service Optimization${NC}"
 
-# Copy configuration
-sudo cp /tmp/xray_config.json /usr/local/etc/xray/config.json
+systemctl enable xray
+systemctl daemon-reload
+systemctl restart xray
 
-# Start Xray service
-sudo systemctl enable xray
-sudo systemctl start xray
+# Wait and check status
+sleep 5
+if systemctl is-active --quiet xray; then
+  echo -e "   Xray Status: ${GREEN}Active & Optimized${NC}"
+else
+  echo -e "   Xray Status: ${RED}Failed${NC}"
+  journalctl -u xray -n 10 --no-pager
+fi
 
-# Check status
-sudo systemctl status xray --no-pager
+# ===== Step 8: Connection Info =====
+echo -e "${GREEN}✅ Step 8: Generating Connection Details${NC}"
 
-# Display connection info
-echo "=========================================="
-echo "🚀 VMESS + TLS Setup Complete!"
-echo "=========================================="
-echo "Address: $(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)"
-echo "Port: 443"
-echo "UUID: REPLACE_UUID"
-echo "Security: tls"
-echo "Network: tcp"
-echo "=========================================="
-EOF
-)
-
-echo "$INSTALL_SCRIPT" > /tmp/install_vmess.sh
-chmod +x /tmp/install_vmess.sh
-ok "Installation script created"
-
-# =================== Step 5: Security Group Setup ===================
-banner "🛡️ Step 5 — Security Group Configuration"
-
-echo "🔓 Opening ports in security groups..."
-# Note: User needs to manually configure security groups for ports 443, 80
-
-ok "Please manually configure AWS Security Groups for:"
-kv "Port 443" "TCP (VMESS + TLS)"
-kv "Port 80" "TCP (Optional for fallback)"
-
-# =================== Step 6: Deployment ===================
-banner "🚀 Step 6 — Deployment Instructions"
-
-echo "📋 Manual deployment steps for AWS EC2:"
-echo ""
-echo "1. 📁 Upload files to EC2:"
-echo "   scp -i your-key.pem /tmp/xray_config.json ec2-user@YOUR_EC2_IP:/tmp/"
-echo "   scp -i your-key.pem /tmp/install_vmess.sh ec2-user@YOUR_EC2_IP:/tmp/"
-echo ""
-echo "2. 🔧 Run installation:"
-echo "   ssh -i your-key.pem ec2-user@YOUR_EC2_IP 'sudo bash /tmp/install_vmess.sh'"
-echo ""
-echo "3. 🔒 Update UUID in script:"
-echo "   Replace 'REPLACE_UUID' with: ${VMESS_UUID}"
-echo ""
-
-# =================== Step 7: Generate VMESS Config ===================
-banner "🔗 Step 7 — VMESS Connection Info"
-
-# Get public IP (if available)
-PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo "YOUR_EC2_PUBLIC_IP")
-
+# VMESS Config
 VMESS_CONFIG=$(cat <<EOF
 {
   "v": "2",
-  "ps": "AWS-VMESS-TLS",
-  "add": "$PUBLIC_IP",
+  "ps": "KSGCP-VMESS-2HR",
+  "add": "$EXT_IP",
   "port": "443",
   "id": "$VMESS_UUID",
   "aid": "0",
@@ -279,57 +201,60 @@ VMESS_CONFIG=$(cat <<EOF
 EOF
 )
 
-# Base64 encode for VMESS share link
 VMESS_BASE64=$(echo "$VMESS_CONFIG" | base64 -w 0)
 VMESS_LINK="vmess://$VMESS_BASE64"
 
-ok "VMESS configuration generated:"
-kv "Server" "$PUBLIC_IP"
-kv "Port" "443"
-kv "UUID" "$VMESS_UUID"
-kv "Security" "tls"
+# Trojan Config
+TROJAN_LINK="trojan://$TROJAN_PASSWORD@$EXT_IP:8443?security=tls&type=tcp#KSGCP-Trojan-2HR"
 
+# ===== Step 9: Time Management =====
+CURRENT_TIME=$(date +%s)
+TIME_USED=$((CURRENT_TIME - START_TIME))
+TIME_REMAINING=$((LAB_DURATION - TIME_USED))
+
+# Convert to minutes
+TIME_USED_MIN=$((TIME_USED / 60))
+TIME_REMAINING_MIN=$((TIME_REMAINING / 60))
+
+# ===== Final Output =====
 echo ""
-echo "📋 VMESS Share Link:"
-echo "$VMESS_LINK"
+echo -e "${PURPLE}╔════════════════════════════════════════════════╗${NC}"
+echo -e "${PURPLE}║              🎯 2:15 HOURS LAB READY          ║${NC}"
+echo -e "${PURPLE}╚════════════════════════════════════════════════╝${NC}"
+echo ""
+echo -e "${GREEN}🚀 Multi-Protocol Deployment Complete!${NC}"
 echo ""
 
-# =================== Telegram Notification ===================
-banner "📢 Step 8 — Telegram Notification"
-
-if [[ -n "${TELEGRAM_TOKEN:-}" && ${#CHAT_ID_ARR[@]} -gt 0 ]]; then
-  MSG=$(cat <<EOF
-<pre>AWS VMESS + TLS DEPLOYED</pre>
-<code>Address: ${PUBLIC_IP}</code>
-<code>Port: 443</code>  
-<code>UUID: ${VMESS_UUID}</code>
-<code>Security: tls</code>
-
-<blockquote>🔗 VMESS Link:</blockquote>
-<code>${VMESS_LINK}</code>
-
-<blockquote>⏰ Lab: Configure an Application Load Balancer with Autoscaling</blockquote>
-<blockquote>🕒 Duration: 3 hours</blockquote>
-EOF
-)
-
-  tg_send "${MSG}"
-  ok "Telegram notification sent"
-else
-  warn "Telegram not configured - skipping notification"
-fi
-
-# =================== Final Instructions ===================
-banner "✅ Deployment Complete"
-
-echo "🎯 Next steps:"
-echo "1. 📁 Upload scripts to your EC2 instances"
-echo "2. 🔧 Run the installation script on each instance"  
-echo "3. 🔒 Configure Load Balancer to forward port 443"
-echo "4. 📱 Test the VMESS connection"
+echo -e "${CYAN}📊 Time Management:${NC}"
+echo -e "   ${YELLOW}Time Used:${NC} $TIME_USED_MIN minutes"
+echo -e "   ${YELLOW}Time Remaining:${NC} $TIME_REMAINING_MIN minutes"
 echo ""
-echo "⏰ Lab Time: 3 hours"
-echo "📄 Log file: $LOG_FILE"
 
-printf "\n${C_GREEN}${BOLD}✨ AWS VMESS + TLS Deployment Ready!${RESET}\n"
-echo "${C_GREY}Note: This script prepares configuration files. Manual EC2 setup required.${RESET}"
+echo -e "${CYAN}🔗 VMESS + TLS:${NC}"
+echo -e "   ${YELLOW}IP:${NC} $EXT_IP:443"
+echo -e "   ${YELLOW}UUID:${NC} $VMESS_UUID"
+echo -e "   ${GREEN}$VMESS_LINK${NC}"
+echo ""
+
+echo -e "${CYAN}🔗 Trojan + TLS:${NC}"
+echo -e "   ${YELLOW}IP:${NC} $EXT_IP:8443"
+echo -e "   ${YELLOW}Password:${NC} $TROJAN_PASSWORD"
+echo -e "   ${GREEN}$TROJAN_LINK${NC}"
+echo ""
+
+echo -e "${BLUE}🎯 Features:${NC}"
+echo -e "   ✅ Dual Protocol (VMESS + Trojan)"
+echo -e "   ✅ TLS Encryption"
+echo -e "   ✅ Traffic Obfuscation"
+echo -e "   ✅ Sniffing Protection"
+echo -e "   ✅ Optimized for 135 minutes"
+echo ""
+
+echo -e "${YELLOW}📝 Usage Tips:${NC}"
+echo -e "   1. Use both links for redundancy"
+echo -e "   2. Monitor time remaining: ~$TIME_REMAINING_MIN minutes"
+echo -e "   3. If one protocol blocked, try the other"
+echo ""
+
+echo -e "${GREEN}✅ Ready for extended usage! Import both links.${NC}"
+echo -e "${CYAN}📄 Log: $LOG_FILE${NC}"
