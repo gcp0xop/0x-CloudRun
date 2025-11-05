@@ -1,20 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ===== Ensure interactive reads even when run via curl/process substitution =====
+# ===== Ensure interactive reads =====
 if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
   exec </dev/tty
 fi
 
-# ===== Logging & error handler =====
-LOG_FILE="/tmp/ksgcp_cloudrun_$(date +%s).log"
+# ===== Logging =====
+LOG_FILE="/tmp/aws_vmess_$(date +%s).log"
 touch "$LOG_FILE"
 on_err() {
   local rc=$?
   echo "" | tee -a "$LOG_FILE"
-  echo "❌ ERROR: Command failed (exit $rc) at line $LINENO: ${BASH_COMMAND}" | tee -a "$LOG_FILE" >&2
-  echo "—— LOG (last 80 lines) ——" >&2
-  tail -n 80 "$LOG_FILE" >&2 || true
+  echo "❌ ERROR: Command failed (exit $rc) at line $LINENO" | tee -a "$LOG_FILE" >&2
   echo "📄 Log File: $LOG_FILE" >&2
   exit $rc
 }
@@ -43,23 +41,40 @@ warn(){ printf "${C_ORG}⚠${RESET} %s\n" "$1"; }
 err(){  printf "${C_RED}✘${RESET} %s\n" "$1"; }
 kv(){   printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"; }
 
-printf "\n${C_CYAN}${BOLD}🚀 KSGCP Cloud Run — gRPC Deploy${RESET}\n"
+printf "\n${C_CYAN}${BOLD}🚀 AWS Load Balancer - VMESS + TLS Deploy${RESET}\n"
 hr
 
-# =================== Simple progress ===================
+# =================== Random progress spinner ===================
 run_with_progress() {
   local label="$1"; shift
-  printf "🔄 %s... " "$label"
-  if "$@" >>"$LOG_FILE" 2>&1; then
-    printf "✅\n"
+  ( "$@" ) >>"$LOG_FILE" 2>&1 &
+  local pid=$!
+  local pct=5
+  if [[ -t 1 ]]; then
+    printf "\e[?25l"
+    while kill -0 "$pid" 2>/dev/null; do
+      local step=$(( (RANDOM % 9) + 2 ))
+      pct=$(( pct + step ))
+      (( pct > 95 )) && pct=95
+      printf "\r🌀 %s... [%s%%]" "$label" "$pct"
+      sleep "$(awk -v r=$RANDOM 'BEGIN{s=0.08+(r%7)/100; printf "%.2f", s }')"
+    done
+    wait "$pid"; local rc=$?
+    printf "\r"
+    if (( rc==0 )); then
+      printf "✅ %s... [100%%]\n" "$label"
+    else
+      printf "❌ %s failed (see %s)\n" "$label" "$LOG_FILE"
+      return $rc
+    fi
+    printf "\e[?25h"
   else
-    printf "❌\n"
-    return 1
+    wait "$pid"
   fi
 }
 
 # =================== Step 1: Telegram Config ===================
-banner "🚀 Step 1 — Telegram Setup"
+banner "🤖 Step 1 — Telegram Setup"
 TELEGRAM_TOKEN="${TELEGRAM_TOKEN:-}"
 TELEGRAM_CHAT_IDS="${TELEGRAM_CHAT_IDS:-${TELEGRAM_CHAT_ID:-}}"
 
@@ -95,151 +110,226 @@ tg_send(){
   done
 }
 
-# =================== Step 2: Project ===================
-banner "🧭 Step 2 — GCP Project"
-PROJECT="$(gcloud config get-value project 2>/dev/null || true)"
-if [[ -z "$PROJECT" ]]; then
-  err "No active project. Run: gcloud config set project <YOUR_PROJECT_ID>"
-  exit 1
-fi
-PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
-ok "Project Loaded: ${PROJECT}"
+# =================== Step 2: AWS EC2 Setup ===================
+banner "🖥️ Step 2 — AWS EC2 Configuration"
 
-# =================== Step 3: Protocol ===================
-banner "🧩 Step 3 — Protocol Selection"
-PROTO="grpc"
-# Use working Docker image for gRPC
-IMAGE="docker.io/iamapinan/gfly:latest"
-ok "Protocol selected: gRPC"
-ok "Docker Image: ${IMAGE}"
+# Get EC2 instance details
+echo "🔍 Detecting EC2 instances..."
+INSTANCES=$(aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId,PublicIpAddress,State.Name]' --output table 2>/dev/null || true)
 
-# =================== Step 4: Region ===================
-banner "🌍 Step 4 — Region Selection"
-REGION="us-central1"
-ok "Region: ${REGION} (US Central)"
-
-# =================== Step 5: Resources ===================
-banner "🧮 Step 5 — Resources"
-CPU="2"  # Qwiklabs မှာ 4vCPU မရဘူး
-MEMORY="2Gi"  # Qwiklabs မှာ 4Gi မရဘူး
-ok "CPU/Mem: ${CPU} vCPU / ${MEMORY} (Qwiklabs Max)"
-
-# =================== Step 6: Service Name ===================
-banner "🪪 Step 6 — Service Name"
-SERVICE="${SERVICE:-ksgcp-grpc}"
-TIMEOUT="${TIMEOUT:-3600}"
-PORT="${PORT:-8080}"
-
-read -rp "🔧 Service name [default: ${SERVICE}]: " _svc || true
-SERVICE="${_svc:-$SERVICE}"
-
-# Fixed passwords - no input needed
-GRPC_PASS="KSGCP-2025"
-GRPC_SERVICE_NAME="GService"
-
-ok "Service: ${SERVICE}"
-ok "Password: ${GRPC_PASS}" 
-ok "gRPC Service: ${GRPC_SERVICE_NAME}"
-
-# =================== Timezone Setup ===================
-export TZ="Asia/Yangon"
-START_EPOCH="$(date +%s)"
-END_EPOCH="$(( START_EPOCH + 5*3600 ))"
-fmt_dt(){ date -d @"$1" "+%d.%m.%Y %I:%M %p"; }
-START_LOCAL="$(fmt_dt "$START_EPOCH")"
-END_LOCAL="$(fmt_dt "$END_EPOCH")"
-banner "🕒 Step 7 — Deployment Time"
-kv "Start:" "${START_LOCAL}"
-kv "End:"   "${END_LOCAL}"
-
-# =================== Enable APIs ===================
-banner "⚙️ Step 8 — Enable APIs"
-run_with_progress "Enabling CloudRun & Build APIs" \
-  gcloud services enable run.googleapis.com cloudbuild.googleapis.com --quiet
-
-# =================== Deploy ===================
-banner "🚀 Step 9 — Deploying to Cloud Run"
-echo "🔄 Deploying ${SERVICE} (this may take 2-3 minutes)..."
-
-# Deploy with specific image and settings
-if gcloud run deploy "$SERVICE" \
-  --image="$IMAGE" \
-  --platform=managed \
-  --region="$REGION" \
-  --memory="$MEMORY" \
-  --cpu="$CPU" \
-  --timeout="$TIMEOUT" \
-  --allow-unauthenticated \
-  --port="$PORT" \
-  --min-instances=0 \
-  --max-instances=1 \
-  --quiet >>"$LOG_FILE" 2>&1; then
-  ok "Deployment successful"
+if [[ -z "$INSTANCES" ]]; then
+  warn "No EC2 instances found or AWS CLI not configured"
+  echo "📝 Please manually configure:"
+  echo "   1. AWS CLI: aws configure"
+  echo "   2. EC2 instances with public IP"
+  echo "   3. Security groups allowing ports: 443, 80, 8388"
 else
-  err "Deployment failed - check log file: $LOG_FILE"
-  echo "Trying with 1vCPU 1Gi..."
-  
-  # Try with lower resources
-  if gcloud run deploy "$SERVICE" \
-    --image="$IMAGE" \
-    --platform=managed \
-    --region="$REGION" \
-    --memory="1Gi" \
-    --cpu="1" \
-    --timeout="$TIMEOUT" \
-    --allow-unauthenticated \
-    --port="$PORT" \
-    --min-instances=0 \
-    --max-instances=1 \
-    --quiet >>"$LOG_FILE" 2>&1; then
-    ok "Deployment successful with 1vCPU 1Gi"
-    CPU="2"
-    MEMORY="2Gi"
-  else
-    err "All deployment attempts failed"
-    echo "Full log available at: $LOG_FILE"
-    exit 1
-  fi
+  echo "$INSTANCES"
+  ok "EC2 instances detected"
 fi
 
-# =================== Result ===================
-PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
-CANONICAL_HOST="${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
-URL_CANONICAL="https://${CANONICAL_HOST}"
-banner "✅ Result"
-ok "Service Ready"
-kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
+# =================== Step 3: VMESS + TLS Setup ===================
+banner "🔐 Step 3 — VMESS + TLS Deployment"
 
-# =================== gRPC Configuration ===================
-GRPC_SNI="${CANONICAL_HOST}"
-GRPC_PORT="443"
+# Generate UUID for VMESS
+VMESS_UUID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+ok "Generated VMESS UUID: ${VMESS_UUID}"
 
-# Create shareable gRPC link
-GRPC_LINK="grpc://${GRPC_SNI}:${GRPC_PORT}?serviceName=${GRPC_SERVICE_NAME}&password=${GRPC_PASS}&sni=${GRPC_SNI}#KSGCP-gRPC"
-
-# =================== Telegram Notify ===================
-banner "📣 Step 10 — Telegram Notification"
-
-MSG=$(cat <<EOF
-<code>${GRPC_LINK}</code>
-
-⏳ End: ${END_LOCAL}
+# Create Xray configuration
+XRAY_CONFIG=$(cat <<EOF
+{
+  "inbounds": [
+    {
+      "port": 443,
+      "protocol": "vmess",
+      "settings": {
+        "clients": [
+          {
+            "id": "$VMESS_UUID",
+            "alterId": 0
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "/etc/xray/cert.crt",
+              "keyFile": "/etc/xray/private.key"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "settings": {}
+    }
+  ]
+}
 EOF
 )
 
-tg_send "${MSG}"
+echo "📁 Creating Xray configuration..."
+echo "$XRAY_CONFIG" > /tmp/xray_config.json
+ok "Xray config created"
 
-# Display to user
-printf "\n${C_GREEN}${BOLD}✅ gRPC CONFIGURATION:${RESET}\n"
-hr
-printf "${C_CYAN}${BOLD}gRPC Link:${RESET}\n"
-printf "${C_YEL}${GRPC_LINK}${RESET}\n\n"
-printf "${C_CYAN}${BOLD}Details:${RESET}\n"
-kv "Server" "${GRPC_SNI}"
-kv "Port" "${GRPC_PORT}"
-kv "Service" "${GRPC_SERVICE_NAME}"
-kv "Password" "${GRPC_PASS}"
-kv "Resources" "${CPU}vCPU ${MEMORY}"
+# =================== Step 4: Installation Script ===================
+banner "📦 Step 4 — Installation Script"
 
-printf "\n${C_GREEN}${BOLD}✨ Done — KSGCP gRPC Deployed Successfully | ${CPU}vCPU ${MEMORY} | US Central Region${RESET}\n"
-printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
+# Create installation script for EC2 instances
+INSTALL_SCRIPT=$(cat <<'EOF'
+#!/bin/bash
+
+# Update system
+sudo apt-get update -y
+sudo apt-get upgrade -y
+
+# Install Xray
+sudo bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+
+# Create directory for certificates
+sudo mkdir -p /etc/xray
+
+# Generate self-signed certificate (for testing)
+sudo openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 \
+    -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost" \
+    -keyout /etc/xray/private.key -out /etc/xray/cert.crt
+
+# Copy configuration
+sudo cp /tmp/xray_config.json /usr/local/etc/xray/config.json
+
+# Start Xray service
+sudo systemctl enable xray
+sudo systemctl start xray
+
+# Check status
+sudo systemctl status xray --no-pager
+
+# Display connection info
+echo "=========================================="
+echo "🚀 VMESS + TLS Setup Complete!"
+echo "=========================================="
+echo "Address: $(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)"
+echo "Port: 443"
+echo "UUID: REPLACE_UUID"
+echo "Security: tls"
+echo "Network: tcp"
+echo "=========================================="
+EOF
+)
+
+echo "$INSTALL_SCRIPT" > /tmp/install_vmess.sh
+chmod +x /tmp/install_vmess.sh
+ok "Installation script created"
+
+# =================== Step 5: Security Group Setup ===================
+banner "🛡️ Step 5 — Security Group Configuration"
+
+echo "🔓 Opening ports in security groups..."
+# Note: User needs to manually configure security groups for ports 443, 80
+
+ok "Please manually configure AWS Security Groups for:"
+kv "Port 443" "TCP (VMESS + TLS)"
+kv "Port 80" "TCP (Optional for fallback)"
+
+# =================== Step 6: Deployment ===================
+banner "🚀 Step 6 — Deployment Instructions"
+
+echo "📋 Manual deployment steps for AWS EC2:"
+echo ""
+echo "1. 📁 Upload files to EC2:"
+echo "   scp -i your-key.pem /tmp/xray_config.json ec2-user@YOUR_EC2_IP:/tmp/"
+echo "   scp -i your-key.pem /tmp/install_vmess.sh ec2-user@YOUR_EC2_IP:/tmp/"
+echo ""
+echo "2. 🔧 Run installation:"
+echo "   ssh -i your-key.pem ec2-user@YOUR_EC2_IP 'sudo bash /tmp/install_vmess.sh'"
+echo ""
+echo "3. 🔒 Update UUID in script:"
+echo "   Replace 'REPLACE_UUID' with: ${VMESS_UUID}"
+echo ""
+
+# =================== Step 7: Generate VMESS Config ===================
+banner "🔗 Step 7 — VMESS Connection Info"
+
+# Get public IP (if available)
+PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo "YOUR_EC2_PUBLIC_IP")
+
+VMESS_CONFIG=$(cat <<EOF
+{
+  "v": "2",
+  "ps": "AWS-VMESS-TLS",
+  "add": "$PUBLIC_IP",
+  "port": "443",
+  "id": "$VMESS_UUID",
+  "aid": "0",
+  "scy": "auto",
+  "net": "tcp",
+  "type": "none",
+  "host": "",
+  "path": "",
+  "tls": "tls",
+  "sni": "",
+  "alpn": ""
+}
+EOF
+)
+
+# Base64 encode for VMESS share link
+VMESS_BASE64=$(echo "$VMESS_CONFIG" | base64 -w 0)
+VMESS_LINK="vmess://$VMESS_BASE64"
+
+ok "VMESS configuration generated:"
+kv "Server" "$PUBLIC_IP"
+kv "Port" "443"
+kv "UUID" "$VMESS_UUID"
+kv "Security" "tls"
+
+echo ""
+echo "📋 VMESS Share Link:"
+echo "$VMESS_LINK"
+echo ""
+
+# =================== Telegram Notification ===================
+banner "📢 Step 8 — Telegram Notification"
+
+if [[ -n "${TELEGRAM_TOKEN:-}" && ${#CHAT_ID_ARR[@]} -gt 0 ]]; then
+  MSG=$(cat <<EOF
+<pre>AWS VMESS + TLS DEPLOYED</pre>
+<code>Address: ${PUBLIC_IP}</code>
+<code>Port: 443</code>  
+<code>UUID: ${VMESS_UUID}</code>
+<code>Security: tls</code>
+
+<blockquote>🔗 VMESS Link:</blockquote>
+<code>${VMESS_LINK}</code>
+
+<blockquote>⏰ Lab: Configure an Application Load Balancer with Autoscaling</blockquote>
+<blockquote>🕒 Duration: 3 hours</blockquote>
+EOF
+)
+
+  tg_send "${MSG}"
+  ok "Telegram notification sent"
+else
+  warn "Telegram not configured - skipping notification"
+fi
+
+# =================== Final Instructions ===================
+banner "✅ Deployment Complete"
+
+echo "🎯 Next steps:"
+echo "1. 📁 Upload scripts to your EC2 instances"
+echo "2. 🔧 Run the installation script on each instance"  
+echo "3. 🔒 Configure Load Balancer to forward port 443"
+echo "4. 📱 Test the VMESS connection"
+echo ""
+echo "⏰ Lab Time: 3 hours"
+echo "📄 Log file: $LOG_FILE"
+
+printf "\n${C_GREEN}${BOLD}✨ AWS VMESS + TLS Deployment Ready!${RESET}\n"
+echo "${C_GREY}Note: This script prepares configuration files. Manual EC2 setup required.${RESET}"
