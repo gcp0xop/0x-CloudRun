@@ -67,32 +67,19 @@ kv(){   printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"; }
 printf "\n${C_CYAN}${BOLD}🔥 freegcp0x Cloud Run — Premium Deploy${RESET} ${C_GREY}(Trojan WS / VLESS WS / VLESS gRPC)${RESET}\n"
 hr
 
-# =================== Random progress spinner ===================
+# =================== Fixed Progress Spinner ===================
 run_with_progress() {
   local label="$1"; shift
-  ( "$@" ) >>"$LOG_FILE" 2>&1 &
-  local pid=$!
-  local pct=5
-  if [[ -t 1 ]]; then
-    printf "\e[?25l"
-    while kill -0 "$pid" 2>/dev/null; do
-      local step=$(( (RANDOM % 9) + 2 ))
-      pct=$(( pct + step ))
-      (( pct > 95 )) && pct=95
-      printf "\r🌀 %s... [%s%%]" "$label" "$pct"
-      sleep "$(awk -v r=$RANDOM 'BEGIN{s=0.08+(r%7)/100; printf "%.2f", s }')"
-    done
-    wait "$pid"; local rc=$?
-    printf "\r"
-    if (( rc==0 )); then
-      printf "✅ %s... [100%%]\n" "$label"
-    else
-      printf "❌ %s failed (see %s)\n" "$label" "$LOG_FILE"
-      return $rc
-    fi
-    printf "\e[?25h"
+  echo "🔄 ${label}..." | tee -a "$LOG_FILE"
+  
+  # Run command and capture output
+  if ("$@" >> "$LOG_FILE" 2>&1); then
+    echo "✅ ${label} completed" | tee -a "$LOG_FILE"
+    return 0
   else
-    wait "$pid"
+    local rc=$?
+    echo "❌ ${label} failed (exit code: $rc)" | tee -a "$LOG_FILE"
+    return $rc
   fi
 }
 
@@ -165,15 +152,15 @@ ok "Auto-selected Region: ${REGION}"
 
 # =================== Step 5: Resources ===================
 banner "💪 Step 5 — freegcp0x Resources"
-echo "💡 Auto-set: 4 vCPU / 8GB Memory (Premium Tier)"
-CPU="4"
-MEMORY="8Gi"
+echo "💡 Auto-set: 2 vCPU / 2GB Memory (Optimized Tier)"
+CPU="2"
+MEMORY="2Gi"
 ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
 
 # =================== Step 6: Service Name ===================
 banner "🏷️ Step 6 — freegcp0x Service Name"
 SERVICE="KS_GCP"
-TIMEOUT="${TIMEOUT:-3600}"
+TIMEOUT="${TIMEOUT:-19800}"  # ✅ 5 hours 30 minutes = 19800 seconds
 PORT="${PORT:-8080}"
 ok "Auto-set Service Name: ${SERVICE}"
 
@@ -260,5 +247,5 @@ EOF
 
 tg_send "${MSG}"
 
-printf "\n${C_GREEN}${BOLD}✨ freegcp0x Deployment Complete — 4vCPU/8GB Premium Instance Activated${RESET}\n"
+printf "\n${C_GREEN}${BOLD}✨ freegcp0x Deployment Complete — 2vCPU/2GB Optimized Instance Activated${RESET}\n"
 printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
