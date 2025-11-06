@@ -62,43 +62,32 @@ kv(){   printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"; }
 printf "\n${C_CYAN}${BOLD}🔥 freegcp0x Cloud Run — Premium Deploy${RESET} ${C_GREY}(Trojan WS / VLESS WS / VLESS gRPC)${RESET}\n"
 hr
 
-# =================== Improved Progress Spinner ===================
+# =================== FIXED Progress Spinner ===================
 run_with_progress() {
   local label="$1"; shift
-  local start_time=$(date +%s)
-  
-  ("$@" >> "$LOG_FILE" 2>&1) &
-  local pid=$!
-  
-  local spinner=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
-  local spin_idx=0
-  local pct=0
   
   if [[ -t 1 ]]; then
+    # Interactive mode with simple spinner (no fake percentages)
+    local spinner=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+    local spin_idx=0
+    local start_time=$(date +%s)
+    
     printf "\e[?25l"  # Hide cursor
     
+    # Start the command in background
+    ("$@" >> "$LOG_FILE" 2>&1) &
+    local pid=$!
+    
+    # Show spinner while process is running
     while kill -0 "$pid" 2>/dev/null; do
       local current_time=$(date +%s)
       local elapsed=$((current_time - start_time))
-      
-      # Realistic progress based on time (max 8 minutes for deployment)
-      if (( elapsed < 60 )); then
-        pct=$(( (elapsed * 60) / 480 ))  # First minute: 0-12%
-      elif (( elapsed < 180 )); then
-        pct=$(( 12 + ((elapsed - 60) * 50) / 120 ))  # Next 2 mins: 12-62%
-      elif (( elapsed < 300 )); then
-        pct=$(( 62 + ((elapsed - 180) * 20) / 120 ))  # Next 2 mins: 62-82%
-      else
-        pct=$(( 82 + ((elapsed - 300) * 18) / 180 ))  # Last 3 mins: 82-100%
-      fi
-      
-      (( pct > 98 )) && pct=98
-      
-      printf "\r${spinner[$spin_idx]} %s... [%d%%] (%ds)" "$label" "$pct" "$elapsed"
+      printf "\r${spinner[$spin_idx]} %s... (%ds)" "$label" "$elapsed"
       spin_idx=$(( (spin_idx + 1) % ${#spinner[@]} ))
-      sleep 0.2
+      sleep 0.3
     done
     
+    # Wait for process to complete and get exit code
     wait "$pid"
     local rc=$?
     local end_time=$(date +%s)
@@ -106,12 +95,12 @@ run_with_progress() {
     
     printf "\r"
     if (( rc == 0 )); then
-      printf "✅ %s... [100%%] (%ds)\n" "$label" "$total_time"
+      printf "✅ %s... completed (%ds)\n" "$label" "$total_time"
     else
-      printf "❌ %s failed after %ds (see %s)\n" "$label" "$total_time" "$LOG_FILE"
-      return $rc
+      printf "❌ %s... failed after %ds\n" "$label" "$total_time"
     fi
     printf "\e[?25h"  # Show cursor
+    return $rc
   else
     # Non-interactive fallback
     echo "🔄 ${label}..."
