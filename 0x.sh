@@ -98,13 +98,10 @@ run_with_progress() {
 }
 
 # =================== Telegram Function ===================
-# ⭐️ FIXED: JSON escape function ကို newlines (\n) တွေပါ မှန်ကန်အောင် ပြင်ထားသည်
 json_escape() {
-  # Handles backslashes, quotes, and control characters for JSON
   printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\n/\\n/g' -e 's/\t/\\t/g' -e 's/\r//g'
 }
 
-# ⭐️ FIXED: `curl` command ကို JSON payload သုံးပြီးပို့အောင် ပြင်ထားသည် (newline error မတက်တော့ပါ)
 tg_send() {
   local text="$1"
   if [[ -z "${TELEGRAM_TOKEN:-}" || ${#CHAT_ID_ARR[@]} -eq 0 ]]; then 
@@ -115,13 +112,11 @@ tg_send() {
   escaped_text=$(json_escape "$text")
 
   for _cid in "${CHAT_ID_ARR[@]}"; do
-    # Create the JSON payload
     local json_payload
     json_payload=$(printf '{"chat_id": "%s", "text": "%s", "parse_mode": "HTML"}' \
                     "$_cid" \
                     "$escaped_text")
     
-    # Send using JSON content type
     curl -s -S -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
       -H "Content-Type: application/json" \
       -d "${json_payload}" \
@@ -182,13 +177,11 @@ case "${_opt:-1}" in
   2) 
     PROTO="vless-grpc" 
     IMAGE="docker.io/n4pro/vlessgrpc:latest"
-    # ⭐️ REMOVED: MAX_USERS="15" 
     ok "Protocol selected: VLESS gRPC"
     ;;
   *) 
     PROTO="trojan-ws" 
     IMAGE="docker.io/n4pro/tr:latest"
-    # ⭐️ REMOVED: MAX_USERS="25"
     ok "Protocol selected: TROJAN WS"
     ;;
 esac
@@ -200,12 +193,11 @@ ok "Region: ${REGION} (US Central)"
 
 # =================== Step 5: Resources ===================
 banner "💪 Step 5 — Resources"
-echo "💡 Auto-set: 2 vCPU / 8Gi Memory" # ⭐️ FIXED: တောင်းဆိုထားသည့်အတိုင်း ပြင်ထားသည်
-CPU="2"      # ⭐️ FIXED: 4 မှ 2 သို့ပြောင်းထားသည်
-MEMORY="8Gi" # ⭐️ FIXED: 8Gi 
+echo "💡 Auto-set: 1 vCPU / 1Gi Memory (Optimized for Quota & Performance)"
+CPU="1"
+MEMORY="1Gi"
 CONCURRENCY="100"
 ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
-# ⭐️ REMOVED: ok "Max Users: ${MAX_USERS}"
 ok "Concurrency: ${CONCURRENCY}"
 
 # =================== Step 6: Service Name ===================
@@ -220,10 +212,10 @@ ok "Request Timeout: ${TIMEOUT}s"
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
 
-# 5 နာရီ ၁၀ မိနစ် (310 minutes * 60 seconds = 18600 seconds)
+# 5 hours 10 minutes (18600 seconds)
 END_EPOCH="$(( START_EPOCH + 18600 ))"       
 
-# 5 နာရီ ၁၂ မိနစ် (312 minutes * 60 seconds = 18720 seconds)
+# 5 hours 12 minutes (18720 seconds)
 DELETE_EPOCH="$(( START_EPOCH + 18720 ))" 
 
 START_LOCAL="$(fmt_dt "$START_EPOCH")"
@@ -232,8 +224,8 @@ DELETE_LOCAL="$(fmt_dt "$DELETE_EPOCH")"
 
 banner "⏰ Step 7 — Deployment Time"
 kv "Start:" "${START_LOCAL}"
-kv "End:" "${END_LOCAL} (5 Hours 10 Mins)"
-kv "Auto-Delete:" "${DELETE_LOCAL} (5 Hours 12 Mins)"
+kv "End:" "${END_LOCAL} (5h 10m)"
+kv "Auto-Delete:" "${DELETE_LOCAL} (5h 12m)"
 
 # =================== Step 8: Enable APIs ===================
 banner "🔧 Step 8 — Enable APIs"
@@ -242,7 +234,6 @@ run_with_progress "Enabling CloudRun & Build APIs" \
 
 # =================== Step 9: Deploy ===================
 banner "🚀 Step 9 — Deploying to Cloud Run"
-# ⭐️ REMOVED: echo "📦 Deploying service for ${MAX_USERS} users..."
 echo "⏳ This may take 3-5 minutes..."
 gcloud run deploy "$SERVICE" \
   --image="$IMAGE" \
@@ -254,7 +245,7 @@ gcloud run deploy "$SERVICE" \
   --allow-unauthenticated \
   --port="$PORT" \
   --min-instances=1 \
-  --max-instances=2 \
+  --max-instances=10 \
   --concurrency="${CONCURRENCY}" \
   --quiet
 
@@ -286,7 +277,6 @@ banner "✅ Result"
 ok "Service Ready"
 kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
 kv "Active Until:" "${END_LOCAL}"
-# ⭐️ REMOVED: kv "Max Users:" "${MAX_USERS}"
 kv "Resources:" "${CPU}vCPU / ${MEMORY}"
 
 # =================== Step 12: Generate Hidden URLs ===================
@@ -313,7 +303,6 @@ esac
 # =================== Step 13: Telegram Notify ===================
 banner "📣 Step 13 — Telegram Notification"
 
-# ⭐️ FIXED: User limit နဲ့ဆိုင်တဲ့ စာသားတွေ ဖြုတ်ထားသည်
 MSG=$(cat <<EOF
 <blockquote>🚀 KSGCP V2RAY KEY</blockquote>
 <blockquote>⏰ 5-Hour Free Service</blockquote>
@@ -352,7 +341,7 @@ echo "   (This prevents the service from idling)"
 
 
 printf "\n${C_GREEN}${BOLD}✨ KSGCP ${PROTO^^} Deployed Successfully${RESET}\n"
-printf "${C_GREEN}${BOLD}💪 Resources: ${CPU}vCPU ${MEMORY}${RESET}\n" # ⭐️ REMOVED: User limit
+printf "${C_GREEN}${BOLD}💪 Resources: ${CPU}vCPU ${MEMORY}${RESET}\n"
 printf "${C_GREEN}${BOLD}⏰ 5-Hour Guaranteed Service | Auto-Delete Enabled${RESET}\n"
 printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
 printf "${C_GREY}🔧 Cleanup PID: ${CLEANUP_PID}${RESET}\n"
