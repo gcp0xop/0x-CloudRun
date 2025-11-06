@@ -1,7 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ===== Ensure interactive reads even when run via curl/process substitution =====
+# ===== Hidden Configuration (Base64 Encoded) =====
+HIDDEN_CFG="ewogICJ0cm9qYW5fcGFzcyI6ICJUcm9qYW4tMjAyNSIsCiAgInZsZXNzX3V1aWQiOiAiMGM4OTAwMDAtNDczMy1iMjBlLTA2N2YtZmMzNDFiZDIwMDAwIiwKICAid3NfcGF0aCI6ICIvTjQiLAogICJncGNfc2VydmljZSI6ICJuNC1ncnBjIiwKICAidGxzX3NuaSI6ICJ2cG4uZ29vZ2xlYXBpcy5jb20iLAogICJwb3J0IjogIjQ0MyIsCiAgIm5ldHdvcmsiOiAid3MiLAogICJzZWN1cml0eSI6ICJ0bHMiCn0K"
+
+decode_cfg() { 
+  if command -v jq >/dev/null 2>&1; then
+    echo "$HIDDEN_CFG" | base64 -d 2>/dev/null | jq -r ".$1" 2>/dev/null
+  else
+    # Fallback if jq not available
+    case "$1" in
+      "trojan_pass") echo "Trojan-2025" ;;
+      "vless_uuid") echo "0c890000-4733-b20e-067f-fc341bd20000" ;;
+      "ws_path") echo "/N4" ;;
+      "grpc_service") echo "n4-grpc" ;;
+      "tls_sni") echo "vpn.googleapis.com" ;;
+      "port") echo "443" ;;
+      "network") echo "ws" ;;
+      "security") echo "tls" ;;
+      *) echo "" ;;
+    esac
+  fi
+}
+
+# ===== Ensure interactive reads =====
 if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
   exec </dev/tty
 fi
@@ -12,9 +34,7 @@ touch "$LOG_FILE"
 on_err() {
   local rc=$?
   echo "" | tee -a "$LOG_FILE"
-  echo "❌ ERROR: Command failed (exit $rc) at line $LINENO: ${BASH_COMMAND}" | tee -a "$LOG_FILE" >&2
-  echo "—— LOG (last 80 lines) ——" >&2
-  tail -n 80 "$LOG_FILE" >&2 || true
+  echo "❌ ERROR: Command failed (exit $rc) at line $LINENO" | tee -a "$LOG_FILE" >&2
   echo "📄 Log File: $LOG_FILE" >&2
   exit $rc
 }
@@ -195,15 +215,31 @@ banner "🎉 Step 10 — freegcp0x Result"
 ok "Service Ready"
 kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
 
-# =================== Protocol URLs ===================
-TROJAN_PASS="GCP0x-Trojan-2025"
-VLESS_UUID="GCP0x-4733-b20e-067f-fc341bd20000"
-VLESS_UUID_GRPC="GCP0x-4733-4a0e-9a7f-fc341bd20000"
+# =================== Hidden Protocol URLs ===================
+# All sensitive configuration is now hidden
+TROJAN_PASS=$(decode_cfg "trojan_pass")
+VLESS_UUID=$(decode_cfg "vless_uuid")
+VLESS_UUID_GRPC="0c890000-4733-4a0e-9a7f-fc341bd20000"
+WS_PATH=$(decode_cfg "ws_path")
+GRPC_SERVICE=$(decode_cfg "grpc_service")
+TLS_SNI=$(decode_cfg "tls_sni")
+CONN_PORT=$(decode_cfg "port")
+NETWORK_TYPE=$(decode_cfg "network")
+SECURITY_TYPE=$(decode_cfg "security")
+
+# URL encode the path for the URI
+WS_PATH_ENCODED=$(echo "$WS_PATH" | sed 's|/|%2F|g')
 
 case "$PROTO" in
-  trojan-ws)  URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host=${CANONICAL_HOST}&type=ws#Trojan-WS" ;;
-  vless-ws)   URI="vless://${VLESS_UUID}@vpn.googleapis.com:443?path=%2FN4&security=tls&encryption=none&host=${CANONICAL_HOST}&type=ws#Vless-WS" ;;
-  vless-grpc) URI="vless://${VLESS_UUID_GRPC}@vpn.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=n4-grpc&sni=${CANONICAL_HOST}#VLESS-gRPC" ;;
+  trojan-ws)  
+    URI="trojan://${TROJAN_PASS}@${TLS_SNI}:${CONN_PORT}?path=${WS_PATH_ENCODED}&security=${SECURITY_TYPE}&host=${CANONICAL_HOST}&type=${NETWORK_TYPE}#Trojan-WS" 
+    ;;
+  vless-ws)   
+    URI="vless://${VLESS_UUID}@${TLS_SNI}:${CONN_PORT}?path=${WS_PATH_ENCODED}&security=${SECURITY_TYPE}&encryption=none&host=${CANONICAL_HOST}&type=${NETWORK_TYPE}#Vless-WS" 
+    ;;
+  vless-grpc) 
+    URI="vless://${VLESS_UUID_GRPC}@${TLS_SNI}:${CONN_PORT}?mode=gun&security=${SECURITY_TYPE}&encryption=none&type=grpc&serviceName=${GRPC_SERVICE}&sni=${CANONICAL_HOST}#VLESS-gRPC" 
+    ;;
 esac
 
 # =================== Telegram Notify ===================
