@@ -124,7 +124,7 @@ fmt_dt() {
 }
 
 # =================== Main Script Starts Here ===================
-printf "\n${C_CYAN}${BOLD}🚀 KSGCP Cloud Run — 50 Users Trojan WS / gRPC Deploy${RESET}\n"
+printf "\n${C_CYAN}${BOLD}🚀 KSGCP Cloud Run — High Performance Deploy${RESET}\n"
 hr
 
 # =================== Step 1: Telegram Config ===================
@@ -162,20 +162,20 @@ ok "Project Loaded: ${PROJECT}"
 
 # =================== Step 3: Protocol ===================
 banner "🧩 Step 3 — Protocol Selection"
-echo "  1️⃣ Trojan WS (Recommended - 50 Users)"
-echo "  2️⃣ VLESS gRPC (Alternative - 30 Users)"
+echo "  1️⃣ Trojan WS (Recommended - ~25 Users)"
+echo "  2️⃣ VLESS gRPC (Alternative - ~15 Users)"
 read -rp "Choose [1-2, default 1]: " _opt || true
 case "${_opt:-1}" in
   2) 
     PROTO="vless-grpc" 
     IMAGE="docker.io/n4pro/vlessgrpc:latest"
-    MAX_USERS="30"
+    MAX_USERS="15" # ⭐️ FIXED: Lowered user count
     ok "Protocol selected: VLESS gRPC (${MAX_USERS} users)"
     ;;
   *) 
     PROTO="trojan-ws" 
     IMAGE="docker.io/n4pro/tr:latest"
-    MAX_USERS="50"
+    MAX_USERS="25" # ⭐️ FIXED: Lowered user count
     ok "Protocol selected: TROJAN WS (${MAX_USERS} users)"
     ;;
 esac
@@ -187,9 +187,9 @@ ok "Region: ${REGION} (US Central)"
 
 # =================== Step 5: Resources ===================
 banner "💪 Step 5 — Resources"
-echo "💡 Auto-set: 8 vCPU / 16GB Memory (50 Users Optimized)"
-CPU="8"
-MEMORY="16Gi"
+echo "💡 Auto-set: 4 vCPU / 8Gi Memory (Quota-friendly)" # ⭐️ FIXED: Lowered resources
+CPU="4"      # ⭐️ FIXED: Was 8
+MEMORY="8Gi" # ⭐️ FIXED: Was 16Gi
 CONCURRENCY="100"
 ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
 ok "Max Users: ${MAX_USERS}"
@@ -198,21 +198,23 @@ ok "Concurrency: ${CONCURRENCY}"
 # =================== Step 6: Service Name ===================
 banner "🏷️ Step 6 — Service Name"
 SERVICE="ksgcp"
-TIMEOUT="${TIMEOUT:-19800}"
+# ⭐️ FIXED: Timeout set to 3600 (1 hour), the maximum allowed by Cloud Run.
+TIMEOUT="3600"
 PORT="${PORT:-8080}"
 ok "Auto-set Service Name: ${SERVICE}"
+ok "Request Timeout: ${TIMEOUT}s"
 
 # =================== Step 7: Timezone Setup ===================
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
-END_EPOCH="$(( START_EPOCH + 5*3600 ))"
-DELETE_EPOCH="$(( START_EPOCH + 5*3600 + 300 ))"
+END_EPOCH="$(( START_EPOCH + 5*3600 ))"       # 5 hour service lifetime
+DELETE_EPOCH="$(( START_EPOCH + 5*3600 + 300 ))" # 5.5 hour deletion time
 START_LOCAL="$(fmt_dt "$START_EPOCH")"
 END_LOCAL="$(fmt_dt "$END_EPOCH")"
 DELETE_LOCAL="$(fmt_dt "$DELETE_EPOCH")"
 banner "⏰ Step 7 — Deployment Time"
 kv "Start:" "${START_LOCAL}"
-kv "End:" "${END_LOCAL}"
+kv "End:" "${END_LOCAL} (5 Hours)"
 kv "Auto-Delete:" "${DELETE_LOCAL}"
 kv "Max Users:" "${MAX_USERS}"
 
@@ -223,8 +225,8 @@ run_with_progress "Enabling CloudRun & Build APIs" \
 
 # =================== Step 9: Deploy ===================
 banner "🚀 Step 9 — Deploying to Cloud Run"
-echo "📦 Deploying high-performance service for ${MAX_USERS} users..."
-echo "⏳ This may take 5-8 minutes (large container)..."
+echo "📦 Deploying service for ${MAX_USERS} users..."
+echo "⏳ This may take 3-5 minutes..."
 gcloud run deploy "$SERVICE" \
   --image="$IMAGE" \
   --platform=managed \
@@ -239,32 +241,32 @@ gcloud run deploy "$SERVICE" \
   --concurrency="${CONCURRENCY}" \
   --quiet
 
-ok "High-performance deployment completed"
+ok "Deployment completed"
 
 # =================== Step 10: Auto-Delete Setup ===================
 banner "🔄 Step 10 — Auto-Delete Setup"
-echo "⏰ Setting up auto-delete in 5 hours..."
+echo "⏰ Setting up auto-delete in ~5 hours..."
 
 CLEANUP_SCRIPT="/tmp/cleanup_${SERVICE}.sh"
 cat > "$CLEANUP_SCRIPT" << EOF
 #!/bin/bash
 sleep $((DELETE_EPOCH - $(date +%s)))
 gcloud run services delete "$SERVICE" --region="$REGION" --quiet
-echo "✅ Auto-deleted service: $SERVICE"
+echo "✅ Auto-deleted service: $SERVICE at \$(date)"
 EOF
 
 chmod +x "$CLEANUP_SCRIPT"
 nohup bash "$CLEANUP_SCRIPT" > /tmp/cleanup_${SERVICE}.log 2>&1 &
 CLEANUP_PID=$!
 
-ok "Auto-delete scheduled for: ${DELETE_LOCAL}"
+ok "Auto-delete scheduled for: ${DELETE_LOCAL} (PID: ${CLEANUP_PID})"
 
 # =================== Step 11: Result ===================
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
 CANONICAL_HOST="${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
 URL_CANONICAL="https://${CANONICAL_HOST}"
 banner "✅ Result"
-ok "High-Performance Service Ready"
+ok "Service Ready"
 kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
 kv "Active Until:" "${END_LOCAL}"
 kv "Max Users:" "${MAX_USERS}"
@@ -295,8 +297,8 @@ esac
 banner "📣 Step 13 — Telegram Notification"
 
 MSG=$(cat <<EOF
-<blockquote>🚀 KSGCP V2RAY KEY - 50 Users</blockquote>
-<blockquote>💪 High Performance: 8vCPU 16GB</blockquote>
+<blockquote>🚀 KSGCP V2RAY KEY - ${MAX_USERS} Users</blockquote>
+<blockquote>💪 Resources: ${CPU}vCPU ${MEMORY}</blockquote>
 <blockquote>⏰ 5-Hour Free Service</blockquote>
 <blockquote>👥 Max Users: ${MAX_USERS}</blockquote>
 <blockquote>📡 Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်!</blockquote>
@@ -311,17 +313,33 @@ EOF
 tg_send "${MSG}"
 
 # =================== Step 14: Keep-Alive Service ===================
-{
-  echo "🔋 Starting keep-alive service for high-performance instance..."
-  while [[ $(date +%s) -lt $END_EPOCH ]]; do
-    curl -s --connect-timeout 10 "https://${CANONICAL_HOST}" >/dev/null 2>&1 &
-    sleep 30
-  done
-  echo "🛑 Keep-alive stopped"
-} &
+# ⭐️ FIXED: Made keep-alive process robust using nohup, like the cleanup script.
+banner "🔋 Step 14 — Keep-Alive Service"
+
+KEEPALIVE_SCRIPT="/tmp/keepalive_${SERVICE}.sh"
+KEEPALIVE_LOG="/tmp/keepalive_${SERVICE}.log"
+
+cat > "$KEEPALIVE_SCRIPT" << EOF
+#!/bin/bash
+echo "🔋 Starting keep-alive service..."
+while [[ \$(date +%s) -lt $END_EPOCH ]]; do
+  curl -s --connect-timeout 10 "https://${CANONICAL_HOST}" >/dev/null 2>&1
+  sleep 30
+done
+echo "🛑 Keep-alive stopped at \$(date)"
+EOF
+
+chmod +x "$KEEPALIVE_SCRIPT"
+nohup bash "$KEEPALIVE_SCRIPT" > "$KEEPALIVE_LOG" 2>&1 &
+KEEPALIVE_PID=$!
+
+ok "Keep-alive service started (PID: ${KEEPALIVE_PID})"
+echo "   (This prevents the service from idling)"
+
 
 printf "\n${C_GREEN}${BOLD}✨ KSGCP ${PROTO^^} Deployed Successfully${RESET}\n"
-printf "${C_GREEN}${BOLD}💪 High-Performance: ${CPU}vCPU ${MEMORY} | ${MAX_USERS} Users${RESET}\n"
+printf "${C_GREEN}${BOLD}💪 Resources: ${CPU}vCPU ${MEMORY} | ${MAX_USERS} Users${RESET}\n"
 printf "${C_GREEN}${BOLD}⏰ 5-Hour Guaranteed Service | Auto-Delete Enabled${RESET}\n"
 printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
-printf "${C_GREY}🔧 Cleanup PID: ${CLEANUP_PID}${RESET}\n\n"
+printf "${C_GREY}🔧 Cleanup PID: ${CLEANUP_PID}${RESET}\n"
+printf "${C_GREY}🔋 Keep-Alive PID: ${KEEPALIVE_PID}${RESET}\n\n"
