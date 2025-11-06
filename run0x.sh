@@ -246,7 +246,7 @@ banner "📢 Step 11 — freegcp0x Telegram Notify"
 
 MSG=$(cat <<EOF
 <blockquote>GCP V2RAY KEY</blockquote>
-<blockquote>Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်/blockquote>
+
 <pre><code>${URI}</code></pre>
 
 <blockquote>⏳ End: <code>${END_LOCAL}</code></blockquote>
