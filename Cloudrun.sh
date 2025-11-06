@@ -69,7 +69,6 @@ run_with_progress() {
   
   local start_time=$(date +%s)
   
-  # Run command directly (no background, no spinner)
   if "$@" >> "$LOG_FILE" 2>&1; then
     local end_time=$(date +%s)
     local total_time=$((end_time - start_time))
@@ -129,7 +128,6 @@ if [[ -z "$PROJECT" ]]; then
   err "No active project. Run: gcloud config set project <YOUR_PROJECT_ID>"
   exit 1
 fi
-PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
 ok "Project Loaded: ${PROJECT}"
 
 # =================== Step 3: Protocol ===================
@@ -160,21 +158,26 @@ ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
 
 # =================== Step 6: Service Name ===================
 banner "🏷️ Step 6 — freegcp0x Service Name"
-SERVICE="KS_GCP"
-TIMEOUT="${TIMEOUT:-7200}"
+SERVICE="ks-gcp" # ⭐️ FIXED: Changed _ to - and made lowercase
+# ⭐️ FIXED: Timeout set to 3600 (1 hour), the maximum allowed by Cloud Run.
+TIMEOUT="3600" 
 PORT="${PORT:-8080}"
-ok "Auto-set Service Name: ${SERVICE}"
+ok "Service Name: ${SERVICE}"
+ok "Request Timeout: ${TIMEOUT}s (Cloud Run Max)"
 
 # =================== Timezone Setup ===================
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
 END_EPOCH="$(( START_EPOCH + 5*3600 ))"
+DELETE_EPOCH="$(( START_EPOCH + 5*3600 + 300 ))" # ⭐️ ADDED: 5.5 hour deletion time
 fmt_dt(){ date -d @"$1" "+%d.%m.%Y %I:%M %p"; }
 START_LOCAL="$(fmt_dt "$START_EPOCH")"
 END_LOCAL="$(fmt_dt "$END_EPOCH")"
+DELETE_LOCAL="$(fmt_dt "$DELETE_EPOCH")" # ⭐️ ADDED
 banner "⏰ Step 7 — freegcp0x Deployment Time"
 kv "Start:" "${START_LOCAL}"
-kv "End:"   "${END_LOCAL}"
+kv "End:"   "${END_LOCAL} (5 Hours)"
+kv "Auto-Delete:" "${DELETE_LOCAL}" # ⭐️ ADDED
 
 # =================== Enable APIs ===================
 banner "🔧 Step 8 — freegcp0x Enable APIs"
@@ -183,7 +186,7 @@ run_with_progress "Enabling CloudRun & Build APIs" \
 
 # =================== Deploy ===================
 banner "🚀 Step 9 — freegcp0x Deploying to Cloud Run"
-echo "📦 This may take 5-8 minutes for container deployment..."
+echo "📦 This may take 3-5 minutes for container deployment..."
 
 # Remove --quiet flag to see real progress
 echo "🔄 Deploying ${SERVICE}..."
@@ -196,16 +199,32 @@ gcloud run deploy "$SERVICE" \
   --timeout="$TIMEOUT" \
   --allow-unauthenticated \
   --port="$PORT" \
-  --min-instances=1
-# --quiet flag removed to see actual progress
+  --min-instances=1 \
+  --max-instances=2 \
+  --concurrency=80 \
+  --quiet
+# --quiet flag re-added for clean output, logs go to $LOG_FILE
 
 ok "Deployment completed successfully"
 
 # =================== Result ===================
-PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
-CANONICAL_HOST="${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
-URL_CANONICAL="https://${CANONICAL_HOST}"
 banner "🎉 Step 10 — freegcp0x Result"
+
+# ⭐️ FIXED: Get the REAL URL from gcloud instead of guessing
+echo "🔄 Fetching deployed service URL..."
+URL_CANONICAL=$(gcloud run services describe "$SERVICE" \
+  --region="$REGION" \
+  --platform=managed \
+  --format='value(status.url)' 2>>"$LOG_FILE")
+
+if [[ -z "$URL_CANONICAL" ]]; then
+  err "Failed to get service URL. Check logs."
+  exit 1
+fi
+
+# ⭐️ FIXED: Extract hostname from the full URL
+CANONICAL_HOST=$(echo "$URL_CANONICAL" | sed 's|https://||')
+
 ok "Service Ready"
 kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
 
@@ -234,19 +253,40 @@ case "$PROTO" in
     ;;
 esac
 
+# =================== ⭐️ ADDED: Auto-Delete Setup ===================
+banner "🔄 Step 11 — Auto-Delete Setup"
+echo "⏰ Setting up auto-delete in ~5 hours..."
+
+CLEANUP_SCRIPT="/tmp/cleanup_${SERVICE}.sh"
+cat > "$CLEANUP_SCRIPT" << EOF
+#!/bin/bash
+sleep $((DELETE_EPOCH - $(date +%s)))
+gcloud run services delete "$SERVICE" --region="$REGION" --quiet
+echo "✅ Auto-deleted service: $SERVICE at \$(date)"
+EOF
+
+chmod +x "$CLEANUP_SCRIPT"
+nohup bash "$CLEANUP_SCRIPT" > /tmp/cleanup_${SERVICE}.log 2>&1 &
+CLEANUP_PID=$!
+
+ok "Auto-delete scheduled for: ${DELETE_LOCAL} (PID: ${CLEANUP_PID})"
+
 # =================== Telegram Notify ===================
-banner "📢 Step 11 — freegcp0x Telegram Notify"
+banner "📢 Step 12 — freegcp0x Telegram Notify"
 
 MSG=$(cat <<EOF
-<blockquote>GCP V2RAY KEY</blockquote>
+<blockquote>GCP V2RAY KEY (${PROTO^^})</blockquote>
 <blockquote>Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်</blockquote>
 <pre><code>${URI}</code></pre>
 
 <blockquote>⏳ End: <code>${END_LOCAL}</code></blockquote>
+<blockquote>🗑️ Auto-Delete: <code>${DELETE_LOCAL}</code></blockquote>
 EOF
 )
 
 tg_send "${MSG}"
 
-printf "\n${C_GREEN}${BOLD}✨ freegcp0x Deployment Complete — 2vCPU/2GB Optimized Instance Activated${RESET}\n"
+printf "\n${C_GREEN}${BOLD}✨ freegcp0x Deployment Complete — 2vCPU/2GB Instance Activated${RESET}\n"
+printf "${C_GREEN}${BOLD}⏰ 5-Hour Service | Auto-Delete Enabled${RESET}\n"
 printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
+printf "${C_GREY}🔧 Cleanup PID: ${CLEANUP_PID}${RESET}\n\n"
