@@ -20,6 +20,8 @@ on_err() {
   echo "📄 Log File: $LOG_FILE" >&2
   exit $rc
 }
+
+# Set trap AFTER function definition
 trap on_err ERR
 
 # =================== Color & UI Functions ===================
