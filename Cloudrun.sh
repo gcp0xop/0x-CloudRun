@@ -153,7 +153,7 @@ ok "Auto-selected Region: ${REGION}"
 banner "💪 Step 5 — freegcp0x Resources"
 echo "💡 Auto-set: 2 vCPU / 8GB Memory (Optimized Tier)"
 CPU="2"
-MEMORY="2Gi"
+MEMORY="8Gi"
 ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
 
 # =================== Step 6: Service Name ===================
@@ -176,7 +176,7 @@ END_LOCAL="$(fmt_dt "$END_EPOCH")"
 DELETE_LOCAL="$(fmt_dt "$DELETE_EPOCH")" # ⭐️ ADDED
 banner "⏰ Step 7 — freegcp0x Deployment Time"
 kv "Start:" "${START_LOCAL}"
-kv "End:"   "${END_LOCAL} (5 Hours)"
+kv "End:"   "${END_LOCAL} (2 Hours)"
 kv "Auto-Delete:" "${DELETE_LOCAL}" # ⭐️ ADDED
 
 # =================== Enable APIs ===================
