@@ -219,16 +219,21 @@ ok "Request Timeout: ${TIMEOUT}s"
 # =================== Step 7: Timezone Setup ===================
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
-END_EPOCH="$(( START_EPOCH + 5*3600 ))"       # 5 hour service lifetime
-DELETE_EPOCH="$(( START_EPOCH + 5*3600 + 300 ))" # 5.5 hour deletion time
+
+# 5 နာရီ ၁၀ မိနစ် (310 minutes * 60 seconds = 18600 seconds)
+END_EPOCH="$(( START_EPOCH + 18600 ))"       
+
+# 5 နာရီ ၁၂ မိနစ် (312 minutes * 60 seconds = 18720 seconds)
+DELETE_EPOCH="$(( START_EPOCH + 18720 ))" 
+
 START_LOCAL="$(fmt_dt "$START_EPOCH")"
 END_LOCAL="$(fmt_dt "$END_EPOCH")"
 DELETE_LOCAL="$(fmt_dt "$DELETE_EPOCH")"
+
 banner "⏰ Step 7 — Deployment Time"
 kv "Start:" "${START_LOCAL}"
-kv "End:" "${END_LOCAL} (5 Hours)"
-kv "Auto-Delete:" "${DELETE_LOCAL}"
-# ⭐️ REMOVED: kv "Max Users:" "${MAX_USERS}"
+kv "End:" "${END_LOCAL} (5 Hours 10 Mins)"
+kv "Auto-Delete:" "${DELETE_LOCAL} (5 Hours 12 Mins)"
 
 # =================== Step 8: Enable APIs ===================
 banner "🔧 Step 8 — Enable APIs"
