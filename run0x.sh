@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ===== Hidden Configuration (Base64 Encoded) =====
-HIDDEN_CFG="ewogICJ0cm9qYW5fcGFzcyI6ICJUcm9qYW4tMjAyNSIsCiAgInZsZXNzX3V1aWQiOiAiMGM4OTAwMDAtNDczMy1iMjBlLTA2N2YtZmMzNDFiZDIwMDAwIiwKICAid3NfcGF0aCI6ICIvTjQiLAogICJncGNfc2VydmljZSI6ICJuNC1ncnBjIiwKICAidGxzX3NuaSI6ICJ2cG4uZ29vZ2xlYXBpcy5jb20iLAogICJwb3J0IjogIjQ0MyIsCiAgIm5ldHdvcmsiOiAid3MiLAogICJzZWN1cml0eSI6ICJ0bHMiCn0K"
+HIDDEN_CFG="ewogICJ0cm9qYW5fcGFzcyI6ICJUcm9qYW4tMjAyNSIsCiAgInZsZXNzX3V1aWQiOiAiMGM4OTAwMDAtNDczMy1iMjBlLTA2N2YtZmMzNDFiZDIwMDAwIiwKICAidmxlc3NfdXVpZF9ncnBjIjogIjBjODkwMDAwLTQ3MzMtNGEwZS05YTdmLWZjMzQxYmQyMDAwMCIsCiAgIndzX3BhdGgiOiAiL040IiwKICAiZ3JwY19zZXJ2aWNlIjogIm40LWdycGMiLAogICJ0bHNfc25pIjogInZwbi5nb29nbGVhcGlzLmNvbSIsCiAgInBvcnQiOiAiNDQzIiwKICAibmV0d29yayI6ICJ3cyIsCiAgInNlY3VyaXR5IjogInRscyIKfQo="
 
 decode_cfg() { 
   if command -v jq >/dev/null 2>&1; then
@@ -12,6 +12,7 @@ decode_cfg() {
     case "$1" in
       "trojan_pass") echo "Trojan-2025" ;;
       "vless_uuid") echo "0c890000-4733-b20e-067f-fc341bd20000" ;;
+      "vless_uuid_grpc") echo "0c890000-4733-4a0e-9a7f-fc341bd20000" ;;
       "ws_path") echo "/N4" ;;
       "grpc_service") echo "n4-grpc" ;;
       "tls_sni") echo "vpn.googleapis.com" ;;
@@ -217,15 +218,15 @@ kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
 
 # =================== Hidden Protocol URLs ===================
 # All sensitive configuration is now hidden
-TROJAN_PASS=$(decode_cfg "trojan_pass")
-VLESS_UUID=$(decode_cfg "vless_uuid")
-VLESS_UUID_GRPC="0c890000-4733-4a0e-9a7f-fc341bd20000"
-WS_PATH=$(decode_cfg "ws_path")
-GRPC_SERVICE=$(decode_cfg "grpc_service")
-TLS_SNI=$(decode_cfg "tls_sni")
-CONN_PORT=$(decode_cfg "port")
-NETWORK_TYPE=$(decode_cfg "network")
-SECURITY_TYPE=$(decode_cfg "security")
+TROJAN_PASS=$(decode_cfg "trojan_pass")           # ✅ Hidden - "Trojan-2025"
+VLESS_UUID=$(decode_cfg "vless_uuid")             # ✅ Hidden - "0c890000-4733-b20e-067f-fc341bd20000"
+VLESS_UUID_GRPC=$(decode_cfg "vless_uuid_grpc")   # ✅ Hidden - "0c890000-4733-4a0e-9a7f-fc341bd20000"
+WS_PATH=$(decode_cfg "ws_path")                   # ✅ Hidden - "/N4"
+GRPC_SERVICE=$(decode_cfg "grpc_service")         # ✅ Hidden - "n4-grpc"
+TLS_SNI=$(decode_cfg "tls_sni")                   # ✅ Hidden - "vpn.googleapis.com"
+CONN_PORT=$(decode_cfg "port")                    # ✅ Hidden - "443"
+NETWORK_TYPE=$(decode_cfg "network")              # ✅ Hidden - "ws"
+SECURITY_TYPE=$(decode_cfg "security")            # ✅ Hidden - "tls"
 
 # URL encode the path for the URI
 WS_PATH_ENCODED=$(echo "$WS_PATH" | sed 's|/|%2F|g')
