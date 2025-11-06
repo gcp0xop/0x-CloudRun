@@ -146,12 +146,12 @@ echo "[Docker Hidden] ${IMAGE}" >>"$LOG_FILE"
 
 # =================== Step 4: Region ===================
 banner "🌏 Step 4 — freegcp0x Region"
-REGION="us-central1"
+REGION="us-east4"
 ok "Auto-selected Region: ${REGION}"
 
 # =================== Step 5: Resources ===================
 banner "💪 Step 5 — freegcp0x Resources"
-echo "💡 Auto-set: 2 vCPU / 2GB Memory (Optimized Tier)"
+echo "💡 Auto-set: 2 vCPU / 8GB Memory (Optimized Tier)"
 CPU="2"
 MEMORY="2Gi"
 ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
