@@ -1,4 +1,4 @@
-Auto-Delete-Deletesr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
 # ===== Ensure interactive reads even when run via curl/process substitution =====
@@ -98,22 +98,35 @@ run_with_progress() {
 }
 
 # =================== Telegram Function ===================
-json_escape() { 
-  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+# ⭐️ FIXED: JSON escape function ကို newlines (\n) တွေပါ မှန်ကန်အောင် ပြင်ထားသည်
+json_escape() {
+  # Handles backslashes, quotes, and control characters for JSON
+  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\n/\\n/g' -e 's/\t/\\t/g' -e 's/\r//g'
 }
 
+# ⭐️ FIXED: `curl` command ကို JSON payload သုံးပြီးပို့အောင် ပြင်ထားသည် (newline error မတက်တော့ပါ)
 tg_send() {
   local text="$1"
   if [[ -z "${TELEGRAM_TOKEN:-}" || ${#CHAT_ID_ARR[@]} -eq 0 ]]; then 
     return 0
   fi
   
+  local escaped_text
+  escaped_text=$(json_escape "$text")
+
   for _cid in "${CHAT_ID_ARR[@]}"; do
+    # Create the JSON payload
+    local json_payload
+    json_payload=$(printf '{"chat_id": "%s", "text": "%s", "parse_mode": "HTML"}' \
+                    "$_cid" \
+                    "$escaped_text")
+    
+    # Send using JSON content type
     curl -s -S -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-      -d "chat_id=${_cid}" \
-      --data-urlencode "text=${text}" \
-      -d "parse_mode=HTML" \
+      -H "Content-Type: application/json" \
+      -d "${json_payload}" \
       >>"$LOG_FILE" 2>&1
+      
     ok "Telegram sent → ${_cid}"
   done
 }
@@ -162,21 +175,21 @@ ok "Project Loaded: ${PROJECT}"
 
 # =================== Step 3: Protocol ===================
 banner "🧩 Step 3 — Protocol Selection"
-echo "  1️⃣ Trojan WS (Recommended - ~25 Users)"
-echo "  2️⃣ VLESS gRPC (Alternative - ~15 Users)"
+echo "  1️⃣ Trojan WS (Recommended)"
+echo "  2️⃣ VLESS gRPC (Alternative)"
 read -rp "Choose [1-2, default 1]: " _opt || true
 case "${_opt:-1}" in
   2) 
     PROTO="vless-grpc" 
     IMAGE="docker.io/n4pro/vlessgrpc:latest"
-    MAX_USERS="15" # ⭐️ FIXED: Lowered user count
-    ok "Protocol selected: VLESS gRPC (${MAX_USERS} users)"
+    # ⭐️ REMOVED: MAX_USERS="15" 
+    ok "Protocol selected: VLESS gRPC"
     ;;
   *) 
     PROTO="trojan-ws" 
     IMAGE="docker.io/n4pro/tr:latest"
-    MAX_USERS="25" # ⭐️ FIXED: Lowered user count
-    ok "Protocol selected: TROJAN WS (${MAX_USERS} users)"
+    # ⭐️ REMOVED: MAX_USERS="25"
+    ok "Protocol selected: TROJAN WS"
     ;;
 esac
 
@@ -187,18 +200,17 @@ ok "Region: ${REGION} (US Central)"
 
 # =================== Step 5: Resources ===================
 banner "💪 Step 5 — Resources"
-echo "💡 Auto-set: 4 vCPU / 8Gi Memory (Quota-friendly)" # ⭐️ FIXED: Lowered resources
-CPU="4"      # ⭐️ FIXED: Was 8
-MEMORY="8Gi" # ⭐️ FIXED: Was 16Gi
+echo "💡 Auto-set: 2 vCPU / 8Gi Memory" # ⭐️ FIXED: တောင်းဆိုထားသည့်အတိုင်း ပြင်ထားသည်
+CPU="2"      # ⭐️ FIXED: 4 မှ 2 သို့ပြောင်းထားသည်
+MEMORY="8Gi" # ⭐️ FIXED: 8Gi 
 CONCURRENCY="100"
 ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
-ok "Max Users: ${MAX_USERS}"
+# ⭐️ REMOVED: ok "Max Users: ${MAX_USERS}"
 ok "Concurrency: ${CONCURRENCY}"
 
 # =================== Step 6: Service Name ===================
 banner "🏷️ Step 6 — Service Name"
 SERVICE="ksgcp"
-# ⭐️ FIXED: Timeout set to 3600 (1 hour), the maximum allowed by Cloud Run.
 TIMEOUT="3600"
 PORT="${PORT:-8080}"
 ok "Auto-set Service Name: ${SERVICE}"
@@ -216,7 +228,7 @@ banner "⏰ Step 7 — Deployment Time"
 kv "Start:" "${START_LOCAL}"
 kv "End:" "${END_LOCAL} (5 Hours)"
 kv "Auto-Delete:" "${DELETE_LOCAL}"
-kv "Max Users:" "${MAX_USERS}"
+# ⭐️ REMOVED: kv "Max Users:" "${MAX_USERS}"
 
 # =================== Step 8: Enable APIs ===================
 banner "🔧 Step 8 — Enable APIs"
@@ -225,7 +237,7 @@ run_with_progress "Enabling CloudRun & Build APIs" \
 
 # =================== Step 9: Deploy ===================
 banner "🚀 Step 9 — Deploying to Cloud Run"
-echo "📦 Deploying service for ${MAX_USERS} users..."
+# ⭐️ REMOVED: echo "📦 Deploying service for ${MAX_USERS} users..."
 echo "⏳ This may take 3-5 minutes..."
 gcloud run deploy "$SERVICE" \
   --image="$IMAGE" \
@@ -269,7 +281,7 @@ banner "✅ Result"
 ok "Service Ready"
 kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
 kv "Active Until:" "${END_LOCAL}"
-kv "Max Users:" "${MAX_USERS}"
+# ⭐️ REMOVED: kv "Max Users:" "${MAX_USERS}"
 kv "Resources:" "${CPU}vCPU / ${MEMORY}"
 
 # =================== Step 12: Generate Hidden URLs ===================
@@ -296,10 +308,10 @@ esac
 # =================== Step 13: Telegram Notify ===================
 banner "📣 Step 13 — Telegram Notification"
 
+# ⭐️ FIXED: User limit နဲ့ဆိုင်တဲ့ စာသားတွေ ဖြုတ်ထားသည်
 MSG=$(cat <<EOF
-<blockquote>🚀 KSGCP V2RAY KEY - ${MAX_USERS} Users</blockquote
+<blockquote>🚀 KSGCP V2RAY KEY</blockquote>
 <blockquote>⏰ 5-Hour Free Service</blockquote>
-<blockquote>👥 Max Users: ${MAX_USERS}</blockquote>
 <blockquote>📡 Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်!</blockquote>
 
 <pre><code>${URI}</code></pre>
@@ -311,7 +323,6 @@ EOF
 tg_send "${MSG}"
 
 # =================== Step 14: Keep-Alive Service ===================
-# ⭐️ FIXED: Made keep-alive process robust using nohup, like the cleanup script.
 banner "🔋 Step 14 — Keep-Alive Service"
 
 KEEPALIVE_SCRIPT="/tmp/keepalive_${SERVICE}.sh"
@@ -336,7 +347,7 @@ echo "   (This prevents the service from idling)"
 
 
 printf "\n${C_GREEN}${BOLD}✨ KSGCP ${PROTO^^} Deployed Successfully${RESET}\n"
-printf "${C_GREEN}${BOLD}💪 Resources: ${CPU}vCPU ${MEMORY} | ${MAX_USERS} Users${RESET}\n"
+printf "${C_GREEN}${BOLD}💪 Resources: ${CPU}vCPU ${MEMORY}${RESET}\n" # ⭐️ REMOVED: User limit
 printf "${C_GREEN}${BOLD}⏰ 5-Hour Guaranteed Service | Auto-Delete Enabled${RESET}\n"
 printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
 printf "${C_GREY}🔧 Cleanup PID: ${CLEANUP_PID}${RESET}\n"
