@@ -63,6 +63,8 @@ kv() {
 }
 
 # =================== Hidden Configuration =====
+# ⭐️ NOTE: Problem 2 (Secrets) is linked to Problem 3 (Docker Image).
+# We cannot change these values until we build our own image.
 decode_cfg() { 
   case "$1" in
     "trojan_pass") echo "Trojan-2025" ;;
@@ -139,11 +141,10 @@ hr
 banner "🚀 Step 1 — Telegram Setup"
 TELEGRAM_TOKEN="${TELEGRAM_TOKEN:-}"
 TELEGRAM_CHAT_IDS="${TELEGRAM_CHAT_IDS:-${TELEGRAM_CHAT_ID:-}}"
-
+# ... (rest of Telegram config remains the same) ...
 if [[ ( -z "${TELEGRAM_TOKEN}" || -z "${TELEGRAM_CHAT_IDS}" ) && -f .env ]]; then
   set -a; source ./.env; set +a
 fi
-
 read -rp "🤖 Telegram Bot Token: " _tk || true
 [[ -n "${_tk:-}" ]] && TELEGRAM_TOKEN="$_tk"
 if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then
@@ -151,10 +152,8 @@ if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then
 else
   ok "Telegram token captured."
 fi
-
 read -rp "👤 Owner/Channel Chat ID(s): " _ids || true
 [[ -n "${_ids:-}" ]] && TELEGRAM_CHAT_IDS="${_ids// /}"
-
 CHAT_ID_ARR=()
 IFS=',' read -r -a CHAT_ID_ARR <<< "${TELEGRAM_CHAT_IDS:-}" || true
 
@@ -211,17 +210,13 @@ ok "Request Timeout: ${TIMEOUT}s"
 # =================== Step 7: Timezone Setup ===================
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
-
 # 5 hours 10 minutes (18600 seconds)
 END_EPOCH="$(( START_EPOCH + 18600 ))"       
-
 # 5 hours 12 minutes (18720 seconds)
 DELETE_EPOCH="$(( START_EPOCH + 18720 ))" 
-
 START_LOCAL="$(fmt_dt "$START_EPOCH")"
 END_LOCAL="$(fmt_dt "$END_EPOCH")"
 DELETE_LOCAL="$(fmt_dt "$DELETE_EPOCH")"
-
 banner "⏰ Step 7 — Deployment Time"
 kv "Start:" "${START_LOCAL}"
 kv "End:" "${END_LOCAL} (5h 10m)"
@@ -229,8 +224,8 @@ kv "Auto-Delete:" "${DELETE_LOCAL} (5h 12m)"
 
 # =================== Step 8: Enable APIs ===================
 banner "🔧 Step 8 — Enable APIs"
-run_with_progress "Enabling CloudRun & Build APIs" \
-  gcloud services enable run.googleapis.com cloudbuild.googleapis.com --quiet
+run_with_progress "Enabling Run, Build, & Scheduler APIs" \
+  gcloud services enable run.googleapis.com cloudbuild.googleapis.com cloudscheduler.googleapis.com --quiet
 
 # =================== Step 9: Deploy ===================
 banner "🚀 Step 9 — Deploying to Cloud Run"
@@ -252,21 +247,31 @@ gcloud run deploy "$SERVICE" \
 ok "Deployment completed"
 
 # =================== Step 10: Auto-Delete Setup ===================
+# This script will run on the local machine (e.g. Cloud Shell)
+# It is now responsible for deleting BOTH the Cloud Run service AND the Scheduler job.
 banner "🔄 Step 10 — Auto-Delete Setup"
-echo "⏰ Setting up auto-delete in ~5 hours..."
 
+# We must define the names for our resources
+CLEANUP_SCHEDULER_JOB="ksgcp-keep-alive-job"
 CLEANUP_SCRIPT="/tmp/cleanup_${SERVICE}.sh"
+
 cat > "$CLEANUP_SCRIPT" << EOF
 #!/bin/bash
-sleep $((DELETE_EPOCH - $(date +%s)))
-gcloud run services delete "$SERVICE" --region="$REGION" --quiet
-echo "✅ Auto-deleted service: $SERVICE at \$(date)"
+echo "Cleanup script waiting until ${DELETE_LOCAL}..."
+sleep \$((DELETE_EPOCH - \$(date +%s)))
+
+echo "Deleting Cloud Run service: $SERVICE"
+gcloud run services delete "$SERVICE" --region="$REGION" --quiet || true
+
+echo "Deleting Cloud Scheduler job: ${CLEANUP_SCHEDULER_JOB}"
+gcloud scheduler jobs delete "${CLEANUP_SCHEDULER_JOB}" --quiet || true
+
+echo "✅ Auto-cleanup complete at \$(date)"
 EOF
 
 chmod +x "$CLEANUP_SCRIPT"
 nohup bash "$CLEANUP_SCRIPT" > /tmp/cleanup_${SERVICE}.log 2>&1 &
 CLEANUP_PID=$!
-
 ok "Auto-delete scheduled for: ${DELETE_LOCAL} (PID: ${CLEANUP_PID})"
 
 # =================== Step 11: Result ===================
@@ -288,9 +293,7 @@ TLS_SNI=$(decode_cfg "tls_sni")
 CONN_PORT=$(decode_cfg "port")
 NETWORK_TYPE=$(decode_cfg "network")
 SECURITY_TYPE=$(decode_cfg "security")
-
 WS_PATH_ENCODED=$(echo "$WS_PATH" | sed 's|/|%2F|g')
-
 case "$PROTO" in
   trojan-ws)  
     URI="trojan://${TROJAN_PASS}@${TLS_SNI}:${CONN_PORT}?path=${WS_PATH_ENCODED}&security=${SECURITY_TYPE}&host=${CANONICAL_HOST}&type=${NETWORK_TYPE}#Trojan-WS" 
@@ -302,47 +305,39 @@ esac
 
 # =================== Step 13: Telegram Notify ===================
 banner "📣 Step 13 — Telegram Notification"
-
 MSG=$(cat <<EOF
 <blockquote>🚀 KSGCP V2RAY KEY</blockquote>
 <blockquote>⏰ 5-Hour Free Service</blockquote>
 <blockquote>📡 Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်!</blockquote>
-
 <pre><code>${URI}</code></pre>
-
 <blockquote>⏳ End: <code>${END_LOCAL}</code></blockquote>
 EOF
 )
-
 tg_send "${MSG}"
 
-# =================== Step 14: Keep-Alive Service ===================
-banner "🔋 Step 14 — Keep-Alive Service"
+# =================== Step 14: Keep-Alive Service (Cloud Scheduler) ===================
+# This replaces the old 'nohup' keep-alive.
+# This job runs ON GOOGLE'S CLOUD, not the local machine.
+banner "🔋 Step 14 — Cloud-Native Keep-Alive"
+echo "Creating Google Cloud Scheduler job to keep service alive..."
 
-KEEPALIVE_SCRIPT="/tmp/keepalive_${SERVICE}.sh"
-KEEPALIVE_LOG="/tmp/keepalive_${SERVICE}.log"
+# Delete the job first if it already exists (for re-runs)
+gcloud scheduler jobs delete "$CLEANUP_SCHEDULER_JOB" --quiet >> "$LOG_FILE" 2>&1 || true
 
-cat > "$KEEPALIVE_SCRIPT" << EOF
-#!/bin/bash
-echo "🔋 Starting keep-alive service..."
-while [[ \$(date +%s) -lt $END_EPOCH ]]; do
-  curl -s --connect-timeout 10 "https://${CANONICAL_HOST}" >/dev/null 2>&1
-  sleep 30
-done
-echo "🛑 Keep-alive stopped at \$(date)"
-EOF
+# Create the new job
+run_with_progress "Creating Cloud Scheduler job" \
+  gcloud scheduler jobs create http "$CLEANUP_SCHEDULER_JOB" \
+    --schedule="*/5 * * * *" \
+    --uri="$URL_CANONICAL" \
+    --attempt-deadline="15s" \
+    --time-zone="Etc/UTC"
 
-chmod +x "$KEEPALIVE_SCRIPT"
-nohup bash "$KEEPALIVE_SCRIPT" > "$KEEPALIVE_LOG" 2>&1 &
-KEEPALIVE_PID=$!
-
-ok "Keep-alive service started (PID: ${KEEPALIVE_PID})"
-echo "   (This prevents the service from idling)"
-
+ok "Cloud Scheduler keep-alive job created."
+echo "   (This runs on Google Cloud and is 100% reliable)"
 
 printf "\n${C_GREEN}${BOLD}✨ KSGCP ${PROTO^^} Deployed Successfully${RESET}\n"
 printf "${C_GREEN}${BOLD}💪 Resources: ${CPU}vCPU ${MEMORY}${RESET}\n"
 printf "${C_GREEN}${BOLD}⏰ 5-Hour Guaranteed Service | Auto-Delete Enabled${RESET}\n"
 printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
-printf "${C_GREY}🔧 Cleanup PID: ${CLEANUP_PID}${RESET}\n"
-printf "${C_GREY}🔋 Keep-Alive PID: ${KEEPALIVE_PID}${RESET}\n\n"
+printf "${C_GREY}🔧 Cleanup PID (On this machine): ${CLEANUP_PID}${RESET}\n"
+printf "${C_GREY}🔋 Keep-Alive (On Google Cloud): ${CLEANUP_SCHEDULER_JOB}${RESET}\n\n"
