@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+Auto-Delete-Deletesr/bin/env bash
 set -euo pipefail
 
 # ===== Ensure interactive reads even when run via curl/process substitution =====
@@ -297,16 +297,14 @@ esac
 banner "📣 Step 13 — Telegram Notification"
 
 MSG=$(cat <<EOF
-<blockquote>🚀 KSGCP V2RAY KEY - ${MAX_USERS} Users</blockquote>
-<blockquote>💪 Resources: ${CPU}vCPU ${MEMORY}</blockquote>
+<blockquote>🚀 KSGCP V2RAY KEY - ${MAX_USERS} Users</blockquote
 <blockquote>⏰ 5-Hour Free Service</blockquote>
 <blockquote>👥 Max Users: ${MAX_USERS}</blockquote>
 <blockquote>📡 Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်!</blockquote>
 
 <pre><code>${URI}</code></pre>
 
-<blockquote>🕒 Active Until: <code>${END_LOCAL}</code></blockquote>
-<blockquote>🗑️ Auto-Delete: <code>${DELETE_LOCAL}</code></blockquote>
+<blockquote>⏳ End: <code>${END_LOCAL}</code></blockquote>
 EOF
 )
 
