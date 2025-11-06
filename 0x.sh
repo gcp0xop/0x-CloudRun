@@ -10,30 +10,7 @@ fi
 LOG_FILE="/tmp/ksgcp_cloudrun_$(date +%s).log"
 touch "$LOG_FILE"
 
-# =================== Color & UI ===================
-if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
-  RESET=$'\e[0m'; BOLD=$'\e[1m'; DIM=$'\e[2m'
-  C_CYAN=$'\e[38;5;44m'; C_BLUE=$'\e[38;5;33m'
-  C_GREEN=$'\e[38;5;46m'; C_YEL=$'\e[38;5;226m'
-  C_ORG=$'\e[38;5;214m'; C_PINK=$'\e[38;5;205m'
-  C_GREY=$'\e[38;5;245m'; C_RED=$'\e[38;5;196m'
-else
-  RESET= BOLD= DIM= C_CYAN= C_BLUE= C_GREEN= C_YEL= C_ORG= C_PINK= C_GREY= C_RED=
-fi
-
-hr(){ printf "${C_GREY}%s${RESET}\n" "──────────────────────────────────────────────"; }
-banner(){
-  local title="$1"
-  printf "\n${C_BLUE}${BOLD}╔══════════════════════════════════════════════════╗${RESET}\n"
-  printf   "${C_BLUE}${BOLD}║${RESET}  %s${RESET}\n" "$(printf "%-46s" "$title")"
-  printf   "${C_BLUE}${BOLD}╚══════════════════════════════════════════════════╝${RESET}\n"
-}
-ok(){   printf "${C_GREEN}✔${RESET} %s\n" "$1"; }
-warn(){ printf "${C_ORG}⚠${RESET} %s\n" "$1"; }
-err(){  printf "${C_RED}✘${RESET} %s\n" "$1"; }
-kv(){   printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"; }
-
-# ===== Error Handler (MUST BE DEFINED BEFORE trap) =====
+# ===== Error Handler =====
 on_err() {
   local rc=$?
   echo "" | tee -a "$LOG_FILE"
@@ -43,14 +20,62 @@ on_err() {
   echo "📄 Log File: $LOG_FILE" >&2
   exit $rc
 }
-
-# Set trap AFTER function definition
 trap on_err ERR
 
-printf "\n${C_CYAN}${BOLD}🚀 KSGCP Cloud Run — 50 Users Trojan WS / gRPC Deploy${RESET}\n"
-hr
+# =================== Color & UI Functions ===================
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+  RESET=$'\e[0m'; BOLD=$'\e[1m'; DIM=$'\e[2m'
+  C_CYAN=$'\e[38;5;44m'; C_BLUE=$'\e[38;5;33m'
+  C_GREEN=$'\e[38;5;46m'; C_YEL=$'\e[38;5;226m'
+  C_ORG=$'\e[38;5;214m'; C_PINK=$'\e[38;5;205m'
+  C_GREY=$'\e[38;5;245m'; C_RED=$'\e[38;5;196m'
+else
+  RESET=''; BOLD=''; DIM=''; C_CYAN=''; C_BLUE=''; C_GREEN=''; C_YEL=''; C_ORG=''; C_PINK=''; C_GREY=''; C_RED=''
+fi
 
-# =================== Simple Progress ===================
+hr() { 
+  printf "${C_GREY}%s${RESET}\n" "──────────────────────────────────────────────"
+}
+
+banner() {
+  local title="$1"
+  printf "\n${C_BLUE}${BOLD}╔══════════════════════════════════════════════════╗${RESET}\n"
+  printf "${C_BLUE}${BOLD}║${RESET}  %s${RESET}\n" "$(printf "%-46s" "$title")"
+  printf "${C_BLUE}${BOLD}╚══════════════════════════════════════════════════╝${RESET}\n"
+}
+
+ok() { 
+  printf "${C_GREEN}✔${RESET} %s\n" "$1"
+}
+
+warn() { 
+  printf "${C_ORG}⚠${RESET} %s\n" "$1"
+}
+
+err() { 
+  printf "${C_RED}✘${RESET} %s\n" "$1"
+}
+
+kv() { 
+  printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"
+}
+
+# =================== Hidden Configuration =====
+decode_cfg() { 
+  case "$1" in
+    "trojan_pass") echo "Trojan-2025" ;;
+    "vless_uuid_grpc") echo "0c890000-4733-4a0e-9a7f-fc341bd20000" ;;
+    "ws_path") echo "/N4" ;;
+    "grpc_service") echo "n4-grpc" ;;
+    "tls_sni") echo "vpn.googleapis.com" ;;
+    "port") echo "443" ;;
+    "network") echo "ws" ;;
+    "security") echo "tls" ;;
+    *) echo "" ;;
+  esac
+}
+
+# =================== Progress Function ===================
 run_with_progress() {
   local label="$1"; shift
   echo "🔄 ${label}..."
@@ -69,6 +94,36 @@ run_with_progress() {
     return $rc
   fi
 }
+
+# =================== Telegram Function ===================
+json_escape() { 
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+tg_send() {
+  local text="$1"
+  if [[ -z "${TELEGRAM_TOKEN:-}" || ${#CHAT_ID_ARR[@]} -eq 0 ]]; then 
+    return 0
+  fi
+  
+  for _cid in "${CHAT_ID_ARR[@]}"; do
+    curl -s -S -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+      -d "chat_id=${_cid}" \
+      --data-urlencode "text=${text}" \
+      -d "parse_mode=HTML" \
+      >>"$LOG_FILE" 2>&1
+    ok "Telegram sent → ${_cid}"
+  done
+}
+
+# =================== Time Format Function ===================
+fmt_dt() { 
+  date -d @"$1" "+%d.%m.%Y %I:%M %p"
+}
+
+# =================== Main Script Starts Here ===================
+printf "\n${C_CYAN}${BOLD}🚀 KSGCP Cloud Run — 50 Users Trojan WS / gRPC Deploy${RESET}\n"
+hr
 
 # =================== Step 1: Telegram Config ===================
 banner "🚀 Step 1 — Telegram Setup"
@@ -92,21 +147,6 @@ read -rp "👤 Owner/Channel Chat ID(s): " _ids || true
 
 CHAT_ID_ARR=()
 IFS=',' read -r -a CHAT_ID_ARR <<< "${TELEGRAM_CHAT_IDS:-}" || true
-
-json_escape(){ printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
-
-tg_send(){
-  local text="$1"
-  if [[ -z "${TELEGRAM_TOKEN:-}" || ${#CHAT_ID_ARR[@]} -eq 0 ]]; then return 0; fi
-  for _cid in "${CHAT_ID_ARR[@]}"; do
-    curl -s -S -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-      -d "chat_id=${_cid}" \
-      --data-urlencode "text=${text}" \
-      -d "parse_mode=HTML" \
-      >>"$LOG_FILE" 2>&1
-    ok "Telegram sent → ${_cid}"
-  done
-}
 
 # =================== Step 2: Project ===================
 banner "🧭 Step 2 — GCP Project"
@@ -148,39 +188,38 @@ banner "💪 Step 5 — Resources"
 echo "💡 Auto-set: 8 vCPU / 16GB Memory (50 Users Optimized)"
 CPU="8"
 MEMORY="16Gi"
-CONCURRENCY="100"  # 2 concurrent requests per user
+CONCURRENCY="100"
 ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
 ok "Max Users: ${MAX_USERS}"
 ok "Concurrency: ${CONCURRENCY}"
 
 # =================== Step 6: Service Name ===================
 banner "🏷️ Step 6 — Service Name"
-SERVICE="ksgcp"  # ✅ Fixed service name
-TIMEOUT="${TIMEOUT:-19800}"  # 5.5 hours for safety
+SERVICE="ksgcp"
+TIMEOUT="${TIMEOUT:-19800}"
 PORT="${PORT:-8080}"
 ok "Auto-set Service Name: ${SERVICE}"
 
-# =================== Timezone Setup ===================
+# =================== Step 7: Timezone Setup ===================
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
-END_EPOCH="$(( START_EPOCH + 5*3600 ))"  # 5 hours
-DELETE_EPOCH="$(( START_EPOCH + 5*3600 + 300 ))"  # 5 hours + 5 minutes buffer
-fmt_dt(){ date -d @"$1" "+%d.%m.%Y %I:%M %p"; }
+END_EPOCH="$(( START_EPOCH + 5*3600 ))"
+DELETE_EPOCH="$(( START_EPOCH + 5*3600 + 300 ))"
 START_LOCAL="$(fmt_dt "$START_EPOCH")"
 END_LOCAL="$(fmt_dt "$END_EPOCH")"
 DELETE_LOCAL="$(fmt_dt "$DELETE_EPOCH")"
 banner "⏰ Step 7 — Deployment Time"
 kv "Start:" "${START_LOCAL}"
-kv "End:"   "${END_LOCAL}"
+kv "End:" "${END_LOCAL}"
 kv "Auto-Delete:" "${DELETE_LOCAL}"
 kv "Max Users:" "${MAX_USERS}"
 
-# =================== Enable APIs ===================
+# =================== Step 8: Enable APIs ===================
 banner "🔧 Step 8 — Enable APIs"
 run_with_progress "Enabling CloudRun & Build APIs" \
   gcloud services enable run.googleapis.com cloudbuild.googleapis.com --quiet
 
-# =================== Deploy ===================
+# =================== Step 9: Deploy ===================
 banner "🚀 Step 9 — Deploying to Cloud Run"
 echo "📦 Deploying high-performance service for ${MAX_USERS} users..."
 echo "⏳ This may take 5-8 minutes (large container)..."
@@ -200,11 +239,10 @@ gcloud run deploy "$SERVICE" \
 
 ok "High-performance deployment completed"
 
-# =================== Setup Auto-Delete ===================
+# =================== Step 10: Auto-Delete Setup ===================
 banner "🔄 Step 10 — Auto-Delete Setup"
 echo "⏰ Setting up auto-delete in 5 hours..."
 
-# Create cleanup script
 CLEANUP_SCRIPT="/tmp/cleanup_${SERVICE}.sh"
 cat > "$CLEANUP_SCRIPT" << EOF
 #!/bin/bash
@@ -214,14 +252,12 @@ echo "✅ Auto-deleted service: $SERVICE"
 EOF
 
 chmod +x "$CLEANUP_SCRIPT"
-
-# Run cleanup in background (will auto-delete after 5 hours)
 nohup bash "$CLEANUP_SCRIPT" > /tmp/cleanup_${SERVICE}.log 2>&1 &
 CLEANUP_PID=$!
 
 ok "Auto-delete scheduled for: ${DELETE_LOCAL}"
 
-# =================== Result ===================
+# =================== Step 11: Result ===================
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
 CANONICAL_HOST="${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
 URL_CANONICAL="https://${CANONICAL_HOST}"
@@ -232,22 +268,7 @@ kv "Active Until:" "${END_LOCAL}"
 kv "Max Users:" "${MAX_USERS}"
 kv "Resources:" "${CPU}vCPU / ${MEMORY}"
 
-# =================== Hidden Configuration =====
-decode_cfg() { 
-  case "$1" in
-    "trojan_pass") echo "Trojan-2025" ;;
-    "vless_uuid_grpc") echo "0c890000-4733-4a0e-9a7f-fc341bd20000" ;;
-    "ws_path") echo "/N4" ;;
-    "grpc_service") echo "n4-grpc" ;;
-    "tls_sni") echo "vpn.googleapis.com" ;;
-    "port") echo "443" ;;
-    "network") echo "ws" ;;
-    "security") echo "tls" ;;
-    *) echo "" ;;
-  esac
-}
-
-# =================== Hidden Protocol URLs ===================
+# =================== Step 12: Generate Hidden URLs ===================
 TROJAN_PASS=$(decode_cfg "trojan_pass")
 VLESS_UUID_GRPC=$(decode_cfg "vless_uuid_grpc")
 WS_PATH=$(decode_cfg "ws_path")
@@ -268,8 +289,8 @@ case "$PROTO" in
     ;;
 esac
 
-# =================== Telegram Notify ===================
-banner "📣 Step 11 — Telegram Notification"
+# =================== Step 13: Telegram Notify ===================
+banner "📣 Step 13 — Telegram Notification"
 
 MSG=$(cat <<EOF
 <blockquote>🚀 KSGCP V2RAY KEY - 50 Users</blockquote>
@@ -287,13 +308,12 @@ EOF
 
 tg_send "${MSG}"
 
-# =================== Keep-Alive Background Process ===================
-# Start background process to keep service active
+# =================== Step 14: Keep-Alive Service ===================
 {
   echo "🔋 Starting keep-alive service for high-performance instance..."
   while [[ $(date +%s) -lt $END_EPOCH ]]; do
     curl -s --connect-timeout 10 "https://${CANONICAL_HOST}" >/dev/null 2>&1 &
-    sleep 30  # Ping every 30 seconds for better performance
+    sleep 30
   done
   echo "🛑 Keep-alive stopped"
 } &
