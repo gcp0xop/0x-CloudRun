@@ -1,21 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ===== Hidden Configuration =====
-decode_cfg() { 
-  case "$1" in
-    "trojan_pass") echo "Trojan-2025" ;;
-    "vless_uuid_grpc") echo "0c890000-4733-4a0e-9a7f-fc341bd20000" ;;
-    "ws_path") echo "/N4" ;;
-    "grpc_service") echo "n4-grpc" ;;
-    "tls_sni") echo "vpn.googleapis.com" ;;
-    "port") echo "443" ;;
-    "network") echo "ws" ;;
-    "security") echo "tls" ;;
-    *) echo "" ;;
-  esac
-}
-
 # ===== Ensure interactive reads even when run via curl/process substitution =====
 if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
   exec </dev/tty
@@ -24,16 +9,6 @@ fi
 # ===== Logging & error handler =====
 LOG_FILE="/tmp/ksgcp_cloudrun_$(date +%s).log"
 touch "$LOG_FILE"
-on_err() {
-  local rc=$?
-  echo "" | tee -a "$LOG_FILE"
-  echo "❌ ERROR: Command failed (exit $rc) at line $LINENO: ${BASH_COMMAND}" | tee -a "$LOG_FILE" >&2
-  echo "—— LOG (last 80 lines) ——" >&2
-  tail -n 80 "$LOG_FILE" >&2 || true
-  echo "📄 Log File: $LOG_FILE" >&2
-  exit $rc
-}
-trap on_err ERR
 
 # =================== Color & UI ===================
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
@@ -57,6 +32,20 @@ ok(){   printf "${C_GREEN}✔${RESET} %s\n" "$1"; }
 warn(){ printf "${C_ORG}⚠${RESET} %s\n" "$1"; }
 err(){  printf "${C_RED}✘${RESET} %s\n" "$1"; }
 kv(){   printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"; }
+
+# ===== Error Handler (MUST BE DEFINED BEFORE trap) =====
+on_err() {
+  local rc=$?
+  echo "" | tee -a "$LOG_FILE"
+  echo "❌ ERROR: Command failed (exit $rc) at line $LINENO: ${BASH_COMMAND}" | tee -a "$LOG_FILE" >&2
+  echo "—— LOG (last 80 lines) ——" >&2
+  tail -n 80 "$LOG_FILE" >&2 || true
+  echo "📄 Log File: $LOG_FILE" >&2
+  exit $rc
+}
+
+# Set trap AFTER function definition
+trap on_err ERR
 
 printf "\n${C_CYAN}${BOLD}🚀 KSGCP Cloud Run — 50 Users Trojan WS / gRPC Deploy${RESET}\n"
 hr
@@ -242,6 +231,21 @@ kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
 kv "Active Until:" "${END_LOCAL}"
 kv "Max Users:" "${MAX_USERS}"
 kv "Resources:" "${CPU}vCPU / ${MEMORY}"
+
+# =================== Hidden Configuration =====
+decode_cfg() { 
+  case "$1" in
+    "trojan_pass") echo "Trojan-2025" ;;
+    "vless_uuid_grpc") echo "0c890000-4733-4a0e-9a7f-fc341bd20000" ;;
+    "ws_path") echo "/N4" ;;
+    "grpc_service") echo "n4-grpc" ;;
+    "tls_sni") echo "vpn.googleapis.com" ;;
+    "port") echo "443" ;;
+    "network") echo "ws" ;;
+    "security") echo "tls" ;;
+    *) echo "" ;;
+  esac
+}
 
 # =================== Hidden Protocol URLs ===================
 TROJAN_PASS=$(decode_cfg "trojan_pass")
