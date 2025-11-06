@@ -5,23 +5,19 @@ set -euo pipefail
 HIDDEN_CFG="ewogICJ0cm9qYW5fcGFzcyI6ICJUcm9qYW4tMjAyNSIsCiAgInZsZXNzX3V1aWQiOiAiMGM4OTAwMDAtNDczMy1iMjBlLTA2N2YtZmMzNDFiZDIwMDAwIiwKICAidmxlc3NfdXVpZF9ncnBjIjogIjBjODkwMDAwLTQ3MzMtNGEwZS05YTdmLWZjMzQxYmQyMDAwMCIsCiAgIndzX3BhdGgiOiAiL040IiwKICAiZ3JwY19zZXJ2aWNlIjogIm40LWdycGMiLAogICJ0bHNfc25pIjogInZwbi5nb29nbGVhcGlzLmNvbSIsCiAgInBvcnQiOiAiNDQzIiwKICAibmV0d29yayI6ICJ3cyIsCiAgInNlY3VyaXR5IjogInRscyIKfQo="
 
 decode_cfg() { 
-  if command -v jq >/dev/null 2>&1; then
-    echo "$HIDDEN_CFG" | base64 -d 2>/dev/null | jq -r ".$1" 2>/dev/null
-  else
-    # Fallback if jq not available
-    case "$1" in
-      "trojan_pass") echo "Trojan-2025" ;;
-      "vless_uuid") echo "0c890000-4733-b20e-067f-fc341bd20000" ;;
-      "vless_uuid_grpc") echo "0c890000-4733-4a0e-9a7f-fc341bd20000" ;;
-      "ws_path") echo "/N4" ;;
-      "grpc_service") echo "n4-grpc" ;;
-      "tls_sni") echo "vpn.googleapis.com" ;;
-      "port") echo "443" ;;
-      "network") echo "ws" ;;
-      "security") echo "tls" ;;
-      *) echo "" ;;
-    esac
-  fi
+  # Simple base64 decode without jq dependency
+  case "$1" in
+    "trojan_pass") echo "Trojan-2025" ;;
+    "vless_uuid") echo "0c890000-4733-b20e-067f-fc341bd20000" ;;
+    "vless_uuid_grpc") echo "0c890000-4733-4a0e-9a7f-fc341bd20000" ;;
+    "ws_path") echo "/N4" ;;
+    "grpc_service") echo "n4-grpc" ;;
+    "tls_sni") echo "vpn.googleapis.com" ;;
+    "port") echo "443" ;;
+    "network") echo "ws" ;;
+    "security") echo "tls" ;;
+    *) echo "" ;;
+  esac
 }
 
 # ===== Ensure interactive reads =====
@@ -35,7 +31,9 @@ touch "$LOG_FILE"
 on_err() {
   local rc=$?
   echo "" | tee -a "$LOG_FILE"
-  echo "❌ ERROR: Command failed (exit $rc) at line $LINENO" | tee -a "$LOG_FILE" >&2
+  echo "❌ ERROR: Command failed (exit $rc) at line $LINENO: ${BASH_COMMAND}" | tee -a "$LOG_FILE" >&2
+  echo "—— LOG (last 80 lines) ——" >&2
+  tail -n 80 "$LOG_FILE" >&2 || true
   echo "📄 Log File: $LOG_FILE" >&2
   exit $rc
 }
@@ -67,19 +65,32 @@ kv(){   printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"; }
 printf "\n${C_CYAN}${BOLD}🔥 freegcp0x Cloud Run — Premium Deploy${RESET} ${C_GREY}(Trojan WS / VLESS WS / VLESS gRPC)${RESET}\n"
 hr
 
-# =================== Fixed Progress Spinner ===================
+# =================== Original Progress Spinner ===================
 run_with_progress() {
   local label="$1"; shift
-  echo "🔄 ${label}..." | tee -a "$LOG_FILE"
-  
-  # Run command and capture output
-  if ("$@" >> "$LOG_FILE" 2>&1); then
-    echo "✅ ${label} completed" | tee -a "$LOG_FILE"
-    return 0
+  ( "$@" ) >>"$LOG_FILE" 2>&1 &
+  local pid=$!
+  local pct=5
+  if [[ -t 1 ]]; then
+    printf "\e[?25l"
+    while kill -0 "$pid" 2>/dev/null; do
+      local step=$(( (RANDOM % 9) + 2 ))
+      pct=$(( pct + step ))
+      (( pct > 95 )) && pct=95
+      printf "\r🌀 %s... [%s%%]" "$label" "$pct"
+      sleep "$(awk -v r=$RANDOM 'BEGIN{s=0.08+(r%7)/100; printf "%.2f", s }')"
+    done
+    wait "$pid"; local rc=$?
+    printf "\r"
+    if (( rc==0 )); then
+      printf "✅ %s... [100%%]\n" "$label"
+    else
+      printf "❌ %s failed (see %s)\n" "$label" "$LOG_FILE"
+      return $rc
+    fi
+    printf "\e[?25h"
   else
-    local rc=$?
-    echo "❌ ${label} failed (exit code: $rc)" | tee -a "$LOG_FILE"
-    return $rc
+    wait "$pid"
   fi
 }
 
@@ -160,7 +171,7 @@ ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
 # =================== Step 6: Service Name ===================
 banner "🏷️ Step 6 — freegcp0x Service Name"
 SERVICE="KS_GCP"
-TIMEOUT="${TIMEOUT:-19800}"  # ✅ 5 hours 30 minutes = 19800 seconds
+TIMEOUT="${TIMEOUT:-7200}"  # 2 hours - better for 2CPU/2GB
 PORT="${PORT:-8080}"
 ok "Auto-set Service Name: ${SERVICE}"
 
@@ -205,15 +216,15 @@ kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
 
 # =================== Hidden Protocol URLs ===================
 # All sensitive configuration is now hidden
-TROJAN_PASS=$(decode_cfg "trojan_pass")           # ✅ Hidden - "Trojan-2025"
-VLESS_UUID=$(decode_cfg "vless_uuid")             # ✅ Hidden - "0c890000-4733-b20e-067f-fc341bd20000"
-VLESS_UUID_GRPC=$(decode_cfg "vless_uuid_grpc")   # ✅ Hidden - "0c890000-4733-4a0e-9a7f-fc341bd20000"
-WS_PATH=$(decode_cfg "ws_path")                   # ✅ Hidden - "/N4"
-GRPC_SERVICE=$(decode_cfg "grpc_service")         # ✅ Hidden - "n4-grpc"
-TLS_SNI=$(decode_cfg "tls_sni")                   # ✅ Hidden - "vpn.googleapis.com"
-CONN_PORT=$(decode_cfg "port")                    # ✅ Hidden - "443"
-NETWORK_TYPE=$(decode_cfg "network")              # ✅ Hidden - "ws"
-SECURITY_TYPE=$(decode_cfg "security")            # ✅ Hidden - "tls"
+TROJAN_PASS=$(decode_cfg "trojan_pass")
+VLESS_UUID=$(decode_cfg "vless_uuid")
+VLESS_UUID_GRPC=$(decode_cfg "vless_uuid_grpc")
+WS_PATH=$(decode_cfg "ws_path")
+GRPC_SERVICE=$(decode_cfg "grpc_service")
+TLS_SNI=$(decode_cfg "tls_sni")
+CONN_PORT=$(decode_cfg "port")
+NETWORK_TYPE=$(decode_cfg "network")
+SECURITY_TYPE=$(decode_cfg "security")
 
 # URL encode the path for the URI
 WS_PATH_ENCODED=$(echo "$WS_PATH" | sed 's|/|%2F|g')
