@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ===== Hidden Configuration (Base64 Encoded) =====
-HIDDEN_CFG="ewogICJ0cm9qYW5fcGFzcyI6ICJUcm9qYW4tMjAyNSIsCiAgInZsZXNzX3V1aWQiOiAiMGM4OTAwMDAtNDczMy1iMjBlLTA2N2YtZmMzNDFiZDIwMDAwIiwKICAidmxlc3NfdXVpZF9ncnBjIjogIjBjODkwMDAwLTQ3MzMtNGEwZS05YTdmLWZjMzQxYmQyMDAwMCIsCiAgIndzX3BhdGgiOiAiL040IiwKICAiZ3JwY19zZXJ2aWNlIjogIm40LWdycGMiLAogICJ0bHNfc25pIjogInZwbi5nb29nbGVhcGlzLmNvbSIsCiAgInBvcnQiOiAiNDQzIiwKICAibmV0d29yayI6ICJ3cyIsCiAgInNlY3VyaXR5IjogInRscyIKfQo="
-
+# ===== Hidden Configuration =====
 decode_cfg() { 
-  # Simple base64 decode without jq dependency
   case "$1" in
     "trojan_pass") echo "Trojan-2025" ;;
     "vless_uuid") echo "0c890000-4733-b20e-067f-fc341bd20000" ;;
@@ -65,32 +62,66 @@ kv(){   printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"; }
 printf "\n${C_CYAN}${BOLD}🔥 freegcp0x Cloud Run — Premium Deploy${RESET} ${C_GREY}(Trojan WS / VLESS WS / VLESS gRPC)${RESET}\n"
 hr
 
-# =================== Original Progress Spinner ===================
+# =================== Improved Progress Spinner ===================
 run_with_progress() {
   local label="$1"; shift
-  ( "$@" ) >>"$LOG_FILE" 2>&1 &
+  local start_time=$(date +%s)
+  
+  ("$@" >> "$LOG_FILE" 2>&1) &
   local pid=$!
-  local pct=5
+  
+  local spinner=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+  local spin_idx=0
+  local pct=0
+  
   if [[ -t 1 ]]; then
-    printf "\e[?25l"
+    printf "\e[?25l"  # Hide cursor
+    
     while kill -0 "$pid" 2>/dev/null; do
-      local step=$(( (RANDOM % 9) + 2 ))
-      pct=$(( pct + step ))
-      (( pct > 95 )) && pct=95
-      printf "\r🌀 %s... [%s%%]" "$label" "$pct"
-      sleep "$(awk -v r=$RANDOM 'BEGIN{s=0.08+(r%7)/100; printf "%.2f", s }')"
+      local current_time=$(date +%s)
+      local elapsed=$((current_time - start_time))
+      
+      # Realistic progress based on time (max 8 minutes for deployment)
+      if (( elapsed < 60 )); then
+        pct=$(( (elapsed * 60) / 480 ))  # First minute: 0-12%
+      elif (( elapsed < 180 )); then
+        pct=$(( 12 + ((elapsed - 60) * 50) / 120 ))  # Next 2 mins: 12-62%
+      elif (( elapsed < 300 )); then
+        pct=$(( 62 + ((elapsed - 180) * 20) / 120 ))  # Next 2 mins: 62-82%
+      else
+        pct=$(( 82 + ((elapsed - 300) * 18) / 180 ))  # Last 3 mins: 82-100%
+      fi
+      
+      (( pct > 98 )) && pct=98
+      
+      printf "\r${spinner[$spin_idx]} %s... [%d%%] (%ds)" "$label" "$pct" "$elapsed"
+      spin_idx=$(( (spin_idx + 1) % ${#spinner[@]} ))
+      sleep 0.2
     done
-    wait "$pid"; local rc=$?
+    
+    wait "$pid"
+    local rc=$?
+    local end_time=$(date +%s)
+    local total_time=$((end_time - start_time))
+    
     printf "\r"
-    if (( rc==0 )); then
-      printf "✅ %s... [100%%]\n" "$label"
+    if (( rc == 0 )); then
+      printf "✅ %s... [100%%] (%ds)\n" "$label" "$total_time"
     else
-      printf "❌ %s failed (see %s)\n" "$label" "$LOG_FILE"
+      printf "❌ %s failed after %ds (see %s)\n" "$label" "$total_time" "$LOG_FILE"
       return $rc
     fi
-    printf "\e[?25h"
+    printf "\e[?25h"  # Show cursor
   else
-    wait "$pid"
+    # Non-interactive fallback
+    echo "🔄 ${label}..."
+    if "$@" >> "$LOG_FILE" 2>&1; then
+      echo "✅ ${label} completed"
+    else
+      local rc=$?
+      echo "❌ ${label} failed"
+      return $rc
+    fi
   fi
 }
 
@@ -171,7 +202,7 @@ ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
 # =================== Step 6: Service Name ===================
 banner "🏷️ Step 6 — freegcp0x Service Name"
 SERVICE="KS_GCP"
-TIMEOUT="${TIMEOUT:-7200}"  # 2 hours - better for 2CPU/2GB
+TIMEOUT="${TIMEOUT:-7200}"
 PORT="${PORT:-8080}"
 ok "Auto-set Service Name: ${SERVICE}"
 
@@ -193,6 +224,7 @@ run_with_progress "Enabling CloudRun & Build APIs" \
 
 # =================== Deploy ===================
 banner "🚀 Step 9 — freegcp0x Deploying to Cloud Run"
+echo "📦 This may take 5-8 minutes for container deployment..."
 run_with_progress "Deploying ${SERVICE}" \
   gcloud run deploy "$SERVICE" \
     --image="$IMAGE" \
@@ -215,7 +247,6 @@ ok "Service Ready"
 kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
 
 # =================== Hidden Protocol URLs ===================
-# All sensitive configuration is now hidden
 TROJAN_PASS=$(decode_cfg "trojan_pass")
 VLESS_UUID=$(decode_cfg "vless_uuid")
 VLESS_UUID_GRPC=$(decode_cfg "vless_uuid_grpc")
@@ -226,7 +257,6 @@ CONN_PORT=$(decode_cfg "port")
 NETWORK_TYPE=$(decode_cfg "network")
 SECURITY_TYPE=$(decode_cfg "security")
 
-# URL encode the path for the URI
 WS_PATH_ENCODED=$(echo "$WS_PATH" | sed 's|/|%2F|g')
 
 case "$PROTO" in
@@ -246,7 +276,7 @@ banner "📢 Step 11 — freegcp0x Telegram Notify"
 
 MSG=$(cat <<EOF
 <blockquote>GCP V2RAY KEY</blockquote>
-
+<blockquote>Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်</blockquote>
 <pre><code>${URI}</code></pre>
 
 <blockquote>⏳ End: <code>${END_LOCAL}</code></blockquote>
