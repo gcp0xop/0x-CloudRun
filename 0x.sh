@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 # ===== Ensure interactive reads even when run via curl/process substitution =====
@@ -9,8 +9,6 @@ fi
 # ===== Logging & error handler =====
 LOG_FILE="/tmp/ksgcp_cloudrun_$(date +%s).log"
 touch "$LOG_FILE"
-
-# ===== Error Handler =====
 on_err() {
   local rc=$?
   echo "" | tee -a "$LOG_FILE"
@@ -20,125 +18,64 @@ on_err() {
   echo "📄 Log File: $LOG_FILE" >&2
   exit $rc
 }
-
-# Set trap AFTER function definition
 trap on_err ERR
 
-# =================== Color & UI Functions ===================
+# =================== Color & UI (KSGCP Theme) ===================
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   RESET=$'\e[0m'; BOLD=$'\e[1m'; DIM=$'\e[2m'
-  C_CYAN=$'\e[38;5;44m'; C_BLUE=$'\e[38;5;33m'
-  C_GREEN=$'\e[38;5;46m'; C_YEL=$'\e[38;5;226m'
-  C_ORG=$'\e[38;5;214m'; C_PINK=$'\e[38;5;205m'
-  C_GREY=$'\e[38;5;245m'; C_RED=$'\e[38;5;196m'
+  C_PURPLE=$'\e[38;5;99m'  # For banners
+  C_GOLD=$'\e[38;5;214m'   # For title and highlights
+  C_GREEN=$'\e[38;5;46m'  # OK
+  C_ORG=$'\e[38;5;208m'   # Warn
+  C_GREY=$'\e[38;5;245m'  # Dim
+  C_RED=$'\e[38;5;196m'   # Error
 else
-  RESET=''; BOLD=''; DIM=''; C_CYAN=''; C_BLUE=''; C_GREEN=''; C_YEL=''; C_ORG=''; C_PINK=''; C_GREY=''; C_RED=''
+  RESET= BOLD= DIM= C_PURPLE= C_GOLD= C_GREEN= C_ORG= C_GREY= C_RED=
 fi
 
-hr() { 
-  printf "${C_GREY}%s${RESET}\n" "──────────────────────────────────────────────"
-}
-
-banner() {
+hr(){ printf "${C_GOLD}%s${RESET}\n" "══════════════════════════════════════════════════"; }
+banner(){
   local title="$1"
-  printf "\n${C_BLUE}${BOLD}╔══════════════════════════════════════════════════╗${RESET}\n"
-  printf "${C_BLUE}${BOLD}║${RESET}  %s${RESET}\n" "$(printf "%-46s" "$title")"
-  printf "${C_BLUE}${BOLD}╚══════════════════════════════════════════════════╝${RESET}\n"
+  printf "\n${C_PURPLE}${BOLD}╔══════════════════════════════════════════════════╗${RESET}\n"
+  printf   "${C_PURPLE}${BOLD}║${RESET}  %s${RESET}\n" "$(printf "%-46s" "$title")"
+  printf   "${C_PURPLE}${BOLD}╚══════════════════════════════════════════════════╝${RESET}\n"
 }
+ok(){   printf "${C_GREEN}✔${RESET} %s\n" "$1"; }
+warn(){ printf "${C_ORG}⚠${RESET} %s\n" "$1"; }
+err(){  printf "${C_RED}✘${RESET} %s\n" "$1"; }
+kv(){   printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"; }
 
-ok() { 
-  printf "${C_GREEN}✔${RESET} %s\n" "$1"
-}
+printf "\n${C_GOLD}${BOLD}🚀 KSGCP Cloud Run — One-Click Deploy${RESET} ${C_GREY}(Trojan WS / VLESS WS / VLESS gRPC)${RESET}\n"
+hr
 
-warn() { 
-  printf "${C_ORG}⚠${RESET} %s\n" "$1"
-}
-
-err() { 
-  printf "${C_RED}✘${RESET} %s\n" "$1"
-}
-
-kv() { 
-  printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"
-}
-
-# =================== Hidden Configuration =====
-decode_cfg() { 
-  case "$1" in
-    "trojan_pass") echo "Trojan-2025" ;;
-    "vless_uuid_grpc") echo "0c890000-4733-4a0e-9a7f-fc341bd20000" ;;
-    "ws_path") echo "/N4" ;;
-    "grpc_service") echo "n4-grpc" ;;
-    "tls_sni") echo "vpn.googleapis.com" ;;
-    "port") echo "443" ;;
-    "network") echo "ws" ;;
-    "security") echo "tls" ;;
-    *) echo "" ;;
-  esac
-}
-
-# =================== Progress Function ===================
+# =================== Random progress spinner ===================
 run_with_progress() {
   local label="$1"; shift
-  echo "🔄 ${label}..."
-  
-  local start_time=$(date +%s)
-  if "$@" >> "$LOG_FILE" 2>&1; then
-    local end_time=$(date +%s)
-    local total_time=$((end_time - start_time))
-    echo "✅ ${label} completed (${total_time}s)"
-    return 0
+  ( "$@" ) >>"$LOG_FILE" 2>&1 &
+  local pid=$!
+  local pct=5
+  if [[ -t 1 ]]; then
+    printf "\e[?25l"
+    while kill -0 "$pid" 2>/dev/null; do
+      local step=$(( (RANDOM % 9) + 2 ))
+      pct=$(( pct + step ))
+      (( pct > 95 )) && pct=95
+      printf "\r🌀 %s... [%s%%]" "$label" "$pct"
+      sleep "$(awk -v r=$RANDOM 'BEGIN{s=0.08+(r%7)/100; printf "%.2f", s }')"
+    done
+    wait "$pid"; local rc=$?
+    printf "\r"
+    if (( rc==0 )); then
+      printf "✅ %s... [100%%]\n" "$label"
+    else
+      printf "❌ %s failed (see %s)\n" "$label" "$LOG_FILE"
+      return $rc
+    fi
+    printf "\e[?25h"
   else
-    local rc=$?
-    local end_time=$(date +%s)
-    local total_time=$((end_time - start_time))
-    echo "❌ ${label} failed after ${total_time}s"
-    return $rc
+    wait "$pid"
   fi
 }
-
-# =================== Telegram Function ===================
-# ⭐️ FIXED: JSON escape function ကို newlines (\n) တွေပါ မှန်ကန်အောင် ပြင်ထားသည်
-json_escape() {
-  # Handles backslashes, quotes, and control characters for JSON
-  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\n/\\n/g' -e 's/\t/\\t/g' -e 's/\r//g'
-}
-
-# ⭐️ FIXED: `curl` command ကို JSON payload သုံးပြီးပို့အောင် ပြင်ထားသည် (newline error မတက်တော့ပါ)
-tg_send() {
-  local text="$1"
-  if [[ -z "${TELEGRAM_TOKEN:-}" || ${#CHAT_ID_ARR[@]} -eq 0 ]]; then 
-    return 0
-  fi
-  
-  local escaped_text
-  escaped_text=$(json_escape "$text")
-
-  for _cid in "${CHAT_ID_ARR[@]}"; do
-    # Create the JSON payload
-    local json_payload
-    json_payload=$(printf '{"chat_id": "%s", "text": "%s", "parse_mode": "HTML"}' \
-                    "$_cid" \
-                    "$escaped_text")
-    
-    # Send using JSON content type
-    curl -s -S -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-      -H "Content-Type: application/json" \
-      -d "${json_payload}" \
-      >>"$LOG_FILE" 2>&1
-      
-    ok "Telegram sent → ${_cid}"
-  done
-}
-
-# =================== Time Format Function ===================
-fmt_dt() { 
-  date -d @"$1" "+%d.%m.%Y %I:%M %p"
-}
-
-# =================== Main Script Starts Here ===================
-printf "\n${C_CYAN}${BOLD}🚀 KSGCP Cloud Run — High Performance Deploy${RESET}\n"
-hr
 
 # =================== Step 1: Telegram Config ===================
 banner "🚀 Step 1 — Telegram Setup"
@@ -160,8 +97,67 @@ fi
 read -rp "👤 Owner/Channel Chat ID(s): " _ids || true
 [[ -n "${_ids:-}" ]] && TELEGRAM_CHAT_IDS="${_ids// /}"
 
+DEFAULT_LABEL="Join KSGCP Channel"
+DEFAULT_URL="https://t.me/ksgcp_channel" # <-- Placeholder URL
+BTN_LABELS=(); BTN_URLS=()
+
+read -rp "➕ Add URL button(s)? [y/N]: " _addbtn || true
+if [[ "${_addbtn:-}" =~ ^([yY]|yes)$ ]]; then
+  i=0
+  while true; do
+    echo "—— Button $((i+1)) ——"
+    read -rp "🔖 Label [default: ${DEFAULT_LABEL}]: " _lbl || true
+    if [[ -z "${_lbl:-}" ]]; then
+      BTN_LABELS+=("${DEFAULT_LABEL}")
+      BTN_URLS+=("${DEFAULT_URL}")
+      ok "Added: ${DEFAULT_LABEL} → ${DEFAULT_URL}"
+    else
+      read -rp "🔗 URL (http/https): " _url || true
+      if [[ -n "${_url:-}" && "${_url}" =~ ^https?:// ]]; then
+        BTN_LABELS+=("${_lbl}")
+        BTN_URLS+=("${_url}")
+        ok "Added: ${_lbl} → ${_url}"
+      else
+        warn "Skipped (invalid or empty URL)."
+      fi
+    fi
+    i=$(( i + 1 ))
+    (( i >= 3 )) && break
+    read -rp "➕ Add another button? [y/N]: " _more || true
+    [[ "${_more:-}" =~ ^([yY]|yes)$ ]] || break
+  done
+fi
+
 CHAT_ID_ARR=()
 IFS=',' read -r -a CHAT_ID_ARR <<< "${TELEGRAM_CHAT_IDS:-}" || true
+
+json_escape(){ printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+
+tg_send(){
+  local text="$1" RM=""
+  if [[ -z "${TELEGRAM_TOKEN:-}" || ${#CHAT_ID_ARR[@]} -eq 0 ]]; then return 0; fi
+  if (( ${#BTN_LABELS[@]} > 0 )); then
+    local L1 U1 L2 U2 L3 U3
+    [[ -n "${BTN_LABELS[0]:-}" ]] && L1="$(json_escape "${BTN_LABELS[0]}")" && U1="$(json_escape "${BTN_URLS[0]}")"
+    [[ -n "${BTN_LABELS[1]:-}" ]] && L2="$(json_escape "${BTN_LABELS[1]}")" && U2="$(json_escape "${BTN_URLS[1]}")"
+    [[ -n "${BTN_LABELS[2]:-}" ]] && L3="$(json_escape "${BTN_LABELS[2]}")" && U3="$(json_escape "${BTN_URLS[2]}")"
+    if (( ${#BTN_LABELS[@]} == 1 )); then
+      RM="{\"inline_keyboard\":[[{\"text\":\"${L1}\",\"url\":\"${U1}\"}]]}"
+    elif (( ${#BTN_LABELS[@]} == 2 )); then
+      RM="{\"inline_keyboard\":[[{\"text\":\"${L1}\",\"url\":\"${U1}\"}],[{\"text\":\"${L2}\",\"url\":\"${U2}\"}]]}"
+    else
+      RM="{\"inline_keyboard\":[[{\"text\":\"${L1}\",\"url\":\"${U1}\"}],[{\"text\":\"${L2}\",\"url\":\"${U2}\"},{\"text\":\"${L3}\",\"url\":\"${U3}\"}]]}"
+    fi
+  fi
+  for _cid in "${CHAT_ID_ARR[@]}"; do
+    curl -s -S -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+      -d "chat_id=${_cid}" \
+      --data-urlencode "text=${text}" \
+      -d "parse_mode=HTML" \
+      ${RM:+--data-urlencode "reply_markup=${RM}"} >>"$LOG_FILE" 2>&1
+    ok "Telegram sent → ${_cid}"
+  done
+}
 
 # =================== Step 2: Project ===================
 banner "🧭 Step 2 — GCP Project"
@@ -174,181 +170,106 @@ PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNum
 ok "Project Loaded: ${PROJECT}"
 
 # =================== Step 3: Protocol ===================
-banner "🧩 Step 3 — Protocol Selection"
-echo "  1️⃣ Trojan WS (Recommended)"
-echo "  2️⃣ VLESS gRPC (Alternative)"
-read -rp "Choose [1-2, default 1]: " _opt || true
+banner "🧩 Step 3 — Select Protocol"
+echo "  1️⃣ Trojan WS"
+echo "  2️⃣ VLESS WS"
+echo "  3️⃣ VLESS gRPC"
+read -rp "Choose [1-3, default 1]: " _opt || true
 case "${_opt:-1}" in
-  2) 
-    PROTO="vless-grpc" 
-    IMAGE="docker.io/n4pro/vlessgrpc:latest"
-    # ⭐️ REMOVED: MAX_USERS="15" 
-    ok "Protocol selected: VLESS gRPC"
-    ;;
-  *) 
-    PROTO="trojan-ws" 
-    IMAGE="docker.io/n4pro/tr:latest"
-    # ⭐️ REMOVED: MAX_USERS="25"
-    ok "Protocol selected: TROJAN WS"
-    ;;
+  2) PROTO="vless-ws"   ; IMAGE="docker.io/n4pro/vl:latest"        ;;
+  3) PROTO="vless-grpc" ; IMAGE="docker.io/n4pro/vlessgrpc:latest" ;;
+  *) PROTO="trojan-ws"  ; IMAGE="docker.io/n4pro/tr:latest"        ;;
 esac
+ok "Protocol selected: ${PROTO^^}"
+echo "[Docker Hidden] ${IMAGE}" >>"$LOG_FILE"
 
-# =================== Step 4: Region ===================
-banner "🌍 Step 4 — Region Selection"
+# =================== Step 4: Region (Auto-set) ===================
+banner "🌍 Step 4 — Region"
 REGION="us-central1"
-ok "Region: ${REGION} (US Central)"
+ok "Region: ${REGION} (Auto-set)"
 
-# =================== Step 5: Resources ===================
-banner "💪 Step 5 — Resources"
-echo "💡 Auto-set: 2 vCPU / 8Gi Memory" # ⭐️ FIXED: တောင်းဆိုထားသည့်အတိုင်း ပြင်ထားသည်
-CPU="2"      # ⭐️ FIXED: 4 မှ 2 သို့ပြောင်းထားသည်
-MEMORY="4Gi" # ⭐️ FIXED:4Gi 
-CONCURRENCY="100"
-ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
-# ⭐️ REMOVED: ok "Max Users: ${MAX_USERS}"
-ok "Concurrency: ${CONCURRENCY}"
+# =================== Step 5: Resources (Auto-set) ===================
+banner "🧮 Step 5 — Resources"
+CPU="2"
+MEMORY="2Gi"
+ok "CPU/Mem: ${CPU} vCPU / ${MEMORY} (Auto-set)"
 
 # =================== Step 6: Service Name ===================
-banner "🏷️ Step 6 — Service Name"
-SERVICE="ksgcp"
-TIMEOUT="3600"
+banner "🪪 Step 6 — Service Name"
+SERVICE="${SERVICE:-ksgcp-vpn}"
+TIMEOUT="${TIMEOUT:-3600}"
 PORT="${PORT:-8080}"
-ok "Auto-set Service Name: ${SERVICE}"
-ok "Request Timeout: ${TIMEOUT}s"
+read -rp "Service name [default: ${SERVICE}]: " _svc || true
+SERVICE="${_svc:-$SERVICE}"
+ok "Service: ${SERVICE}"
 
-# =================== Step 7: Timezone Setup ===================
+# =================== Timezone Setup ===================
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
-END_EPOCH="$(( START_EPOCH + 5*3600 ))"       # 5 hour service lifetime
-DELETE_EPOCH="$(( START_EPOCH + 5*3600 + 300 ))" # 5.5 hour deletion time
+END_EPOCH="$(( START_EPOCH + 5*3600 ))"
+fmt_dt(){ date -d @"$1" "+%d.%m.%Y %I:%M %p"; }
 START_LOCAL="$(fmt_dt "$START_EPOCH")"
 END_LOCAL="$(fmt_dt "$END_EPOCH")"
-DELETE_LOCAL="$(fmt_dt "$DELETE_EPOCH")"
-banner "⏰ Step 7 — Deployment Time"
+banner "🕒 Step 7 — Deployment Time"
 kv "Start:" "${START_LOCAL}"
-kv "End:" "${END_LOCAL} (5 Hours)"
-kv "Auto-Delete:" "${DELETE_LOCAL}"
-# ⭐️ REMOVED: kv "Max Users:" "${MAX_USERS}"
+kv "End:"   "${END_LOCAL}"
 
-# =================== Step 8: Enable APIs ===================
-banner "🔧 Step 8 — Enable APIs"
+# =================== Enable APIs ===================
+banner "⚙️ Step 8 — Enable APIs"
 run_with_progress "Enabling CloudRun & Build APIs" \
   gcloud services enable run.googleapis.com cloudbuild.googleapis.com --quiet
 
-# =================== Step 9: Deploy ===================
+# =================== Deploy ===================
 banner "🚀 Step 9 — Deploying to Cloud Run"
-# ⭐️ REMOVED: echo "📦 Deploying service for ${MAX_USERS} users..."
-echo "⏳ This may take 3-5 minutes..."
-gcloud run deploy "$SERVICE" \
-  --image="$IMAGE" \
-  --platform=managed \
-  --region="$REGION" \
-  --memory="$MEMORY" \
-  --cpu="$CPU" \
-  --timeout="$TIMEOUT" \
-  --allow-unauthenticated \
-  --port="$PORT" \
-  --min-instances=1 \
-  --max-instances=2 \
-  --concurrency="${CONCURRENCY}" \
-  --quiet
+run_with_progress "Deploying ${SERVICE}" \
+  gcloud run deploy "$SERVICE" \
+    --image="$IMAGE" \
+    --platform=managed \
+    --region="$REGION" \
+    --memory="$MEMORY" \
+    --cpu="$CPU" \
+    --timeout="$TIMEOUT" \
+    --allow-unauthenticated \
+    --port="$PORT" \
+    --min-instances=1 \
+    --quiet
 
-ok "Deployment completed"
-
-# =================== Step 10: Auto-Delete Setup ===================
-banner "🔄 Step 10 — Auto-Delete Setup"
-echo "⏰ Setting up auto-delete in ~5 hours..."
-
-CLEANUP_SCRIPT="/tmp/cleanup_${SERVICE}.sh"
-cat > "$CLEANUP_SCRIPT" << EOF
-#!/bin/bash
-sleep $((DELETE_EPOCH - $(date +%s)))
-gcloud run services delete "$SERVICE" --region="$REGION" --quiet
-echo "✅ Auto-deleted service: $SERVICE at \$(date)"
-EOF
-
-chmod +x "$CLEANUP_SCRIPT"
-nohup bash "$CLEANUP_SCRIPT" > /tmp/cleanup_${SERVICE}.log 2>&1 &
-CLEANUP_PID=$!
-
-ok "Auto-delete scheduled for: ${DELETE_LOCAL} (PID: ${CLEANUP_PID})"
-
-# =================== Step 11: Result ===================
+# =================== Result ===================
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
 CANONICAL_HOST="${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
 URL_CANONICAL="https://${CANONICAL_HOST}"
 banner "✅ Result"
 ok "Service Ready"
-kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
-kv "Active Until:" "${END_LOCAL}"
-# ⭐️ REMOVED: kv "Max Users:" "${MAX_USERS}"
-kv "Resources:" "${CPU}vCPU / ${MEMORY}"
+kv "URL:" "${C_GOLD}${BOLD}${URL_CANONICAL}${RESET}"
 
-# =================== Step 12: Generate Hidden URLs ===================
-TROJAN_PASS=$(decode_cfg "trojan_pass")
-VLESS_UUID_GRPC=$(decode_cfg "vless_uuid_grpc")
-WS_PATH=$(decode_cfg "ws_path")
-GRPC_SERVICE=$(decode_cfg "grpc_service")
-TLS_SNI=$(decode_cfg "tls_sni")
-CONN_PORT=$(decode_cfg "port")
-NETWORK_TYPE=$(decode_cfg "network")
-SECURITY_TYPE=$(decode_cfg "security")
-
-WS_PATH_ENCODED=$(echo "$WS_PATH" | sed 's|/|%2F|g')
+# =================== Protocol URLs ===================
+TROJAN_PASS="Trojan-2025"
+VLESS_UUID="0c890000-4733-b20e-067f-fc341bd20000"
+VLESS_UUID_GRPC="0c890000-4733-4a0e-9a7f-fc341bd20000"
 
 case "$PROTO" in
-  trojan-ws)  
-    URI="trojan://${TROJAN_PASS}@${TLS_SNI}:${CONN_PORT}?path=${WS_PATH_ENCODED}&security=${SECURITY_TYPE}&host=${CANONICAL_HOST}&type=${NETWORK_TYPE}#Trojan-WS" 
-    ;;
-  vless-grpc) 
-    URI="vless://${VLESS_UUID_GRPC}@${TLS_SNI}:${CONN_PORT}?mode=gun&security=${SECURITY_TYPE}&encryption=none&type=grpc&serviceName=${GRPC_SERVICE}&sni=${CANONICAL_HOST}#VLESS-gRPC" 
-    ;;
+  trojan-ws)  URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host=${CANONICAL_HOST}&type=ws#KSGCP-Trojan" ;;
+  vless-ws)   URI="vless://${VLESS_UUID}@vpn.googleapis.com:443?path=%2FN4&security=tls&encryption=none&host=${CANONICAL_HOST}&type=ws#KSGCP-Vless" ;;
+  vless-grpc) URI="vless://${VLESS_UUID_GRPC}@vpn.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=n4-grpc&sni=${CANONICAL_HOST}#KSGCP-gRPC" ;;
 esac
 
-# =================== Step 13: Telegram Notify ===================
-banner "📣 Step 13 — Telegram Notification"
+# =================== Telegram Notify ===================
+banner "📣 Step 10 — Telegram Notify"
 
-# ⭐️ FIXED: User limit နဲ့ဆိုင်တဲ့ စာသားတွေ ဖြုတ်ထားသည်
 MSG=$(cat <<EOF
-<blockquote>🚀 KSGCP V2RAY KEY</blockquote>
-<blockquote>⏰ 5-Hour Free Service</blockquote>
-<blockquote>📡 Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်!</blockquote>
+<blockquote>🚀 KSGCP V2RAY KEY
+</blockquote>
+<blockquote>Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်
+</blockquote>
 
 <pre><code>${URI}</code></pre>
 
-<blockquote>⏳ End: <code>${END_LOCAL}</code></blockquote>
+<blockquote>⏳ End
+: <code>${END_LOCAL}</code></blockquote>
 EOF
 )
 
 tg_send "${MSG}"
 
-# =================== Step 14: Keep-Alive Service ===================
-banner "🔋 Step 14 — Keep-Alive Service"
-
-KEEPALIVE_SCRIPT="/tmp/keepalive_${SERVICE}.sh"
-KEEPALIVE_LOG="/tmp/keepalive_${SERVICE}.log"
-
-cat > "$KEEPALIVE_SCRIPT" << EOF
-#!/bin/bash
-echo "🔋 Starting keep-alive service..."
-while [[ \$(date +%s) -lt $END_EPOCH ]]; do
-  curl -s --connect-timeout 10 "https://${CANONICAL_HOST}" >/dev/null 2>&1
-  sleep 30
-done
-echo "🛑 Keep-alive stopped at \$(date)"
-EOF
-
-chmod +x "$KEEPALIVE_SCRIPT"
-nohup bash "$KEEPALIVE_SCRIPT" > "$KEEPALIVE_LOG" 2>&1 &
-KEEPALIVE_PID=$!
-
-ok "Keep-alive service started (PID: ${KEEPALIVE_PID})"
-echo "   (This prevents the service from idling)"
-
-
-printf "\n${C_GREEN}${BOLD}✨ KSGCP ${PROTO^^} Deployed Successfully${RESET}\n"
-printf "${C_GREEN}${BOLD}💪 Resources: ${CPU}vCPU ${MEMORY}${RESET}\n" # ⭐️ REMOVED: User limit
-printf "${C_GREEN}${BOLD}⏰ 5-Hour Guaranteed Service | Auto-Delete Enabled${RESET}\n"
+printf "\n${C_GOLD}${BOLD}✨ Done — Warm Instance Enabled (min=1) | KSGCP UI | Cold Start Prevented${RESET}\n"
 printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
-printf "${C_GREY}🔧 Cleanup PID: ${CLEANUP_PID}${RESET}\n"
-printf "${C_GREY}🔋 Keep-Alive PID: ${KEEPALIVE_PID}${RESET}\n\n"
