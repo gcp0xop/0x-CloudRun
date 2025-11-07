@@ -232,7 +232,7 @@ run_with_progress "Deploying ${SERVICE}" \
     --timeout="$TIMEOUT" \
     --allow-unauthenticated \
     --port="$PORT" \
-    --min-instances=2 \
+    --min-instances=1 \
     --quiet
 
 # =================== Result ===================
