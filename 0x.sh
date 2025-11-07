@@ -177,12 +177,10 @@ ok "Request Timeout: ${TIMEOUT}s"
 # =================== Step 7: Timezone Setup ===================
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
-END_EPOCH="$(( START_EPOCH + 18600 ))" # 5 hours 10 minutes
+# We only need the current time for the message
 START_LOCAL="$(fmt_dt "$START_EPOCH")"
-END_LOCAL="$(fmt_dt "$END_EPOCH")"
 banner "⏰ Step 7 — Deployment Time"
 kv "Start:" "${START_LOCAL}"
-kv "End:" "${END_LOCAL} (Lab Time)"
 
 # =================== STEP 8: (REMOVED) Enable APIs ===================
 # This step was causing the 'Permission Denied' error.
@@ -212,18 +210,16 @@ gcloud run deploy "$SERVICE" \
 ok "Deployment completed"
 
 # =================== STEP 9: (REMOVED) Auto-Delete ===================
-# This step required the terminal to stay open, which is unreliable.
-# The Lab will delete the service when it expires.
+# This step was unreliable and not needed for a Lab.
 ok "Skipping Auto-Delete (Lab will auto-clean)"
 
 # =================== Step 9: Result (Was Step 11) ===================
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
 CANONICAL_HOST="${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
-URL_CANONICAL="https://${CANONICAL_HOST}"
+URL_CANONICAL="https://S{CANONICAL_HOST}"
 banner "✅ Result"
 ok "Service Ready"
 kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
-kv "Active Until:" "${END_LOCAL}"
 kv "Resources:" "${CPU}vCPU / ${MEMORY}"
 
 # =================== Step 10: Generate Hidden URLs (Was Step 12) ===================
@@ -252,12 +248,12 @@ banner "📣 Step 11 — Telegram Notification"
 
 MSG=$(cat <<EOF
 <blockquote>🚀 KSGCP V2RAY KEY</blockquote>
-<blockquote>⏰ 5-Hour Free Service (Lab Time)</blockquote>
+<blockquote>(Service will run for Lab duration)</blockquote>
 <blockquote>📡 Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်!</blockquote>
 
 <pre><code>${URI}</code></pre>
 
-<blockquote>⏳ End: @ <code>${END_LOCAL}</code></blockquote>
+<blockquote>⏳ Start: <code>${START_LOCAL}</code></blockquote>
 EOF
 )
 
