@@ -7,7 +7,7 @@ if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
 fi
 
 # ===== Logging & error handler =====
-LOG_FILE="/tmp/ksgcp_cloudrun_$(date +%s).log"
+LOG_FILE="/tmp/ksgcp_hybrid_$(date +%s).log"
 touch "$LOG_FILE"
 
 # ===== Error Handler =====
@@ -63,12 +63,11 @@ kv() {
 }
 
 # =================== Hidden Configuration =====
+# Assuming the new 'gcp-v2ray-image' uses these hardcoded values
 decode_cfg() { 
   case "$1" in
     "trojan_pass") echo "Trojan-2025" ;;
-    "vless_uuid_grpc") echo "0c890000-4733-4a0e-9a7f-fc341bd20000" ;;
     "ws_path") echo "/N4" ;;
-    "grpc_service") echo "n4-grpc" ;;
     "tls_sni") echo "vpn.googleapis.com" ;;
     "port") echo "443" ;;
     "network") echo "ws" ;;
@@ -132,7 +131,7 @@ fmt_dt() {
 }
 
 # =================== Main Script Starts Here ===================
-printf "\n${C_CYAN}${BOLD}🚀 KSGCP Cloud Run — High Performance Deploy${RESET}\n"
+printf "\n${C_CYAN}${BOLD}🚀 KSGCP Hybrid Deploy (Custom Image + Features)${RESET}\n"
 hr
 
 # =================== Step 1: Telegram Config ===================
@@ -168,23 +167,10 @@ fi
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
 ok "Project Loaded: ${PROJECT}"
 
-# =================== Step 3: Protocol ===================
-banner "🧩 Step 3 — Protocol Selection"
-echo "  1️⃣ Trojan WS (Recommended)"
-echo "  2️⃣ VLESS gRPC (Alternative)"
-read -rp "Choose [1-2, default 1]: " _opt || true
-case "${_opt:-1}" in
-  2) 
-    PROTO="vless-grpc" 
-    IMAGE="docker.io/n4pro/vlessgrpc:latest"
-    ok "Protocol selected: VLESS gRPC"
-    ;;
-  *) 
-    PROTO="trojan-ws" 
-    IMAGE="docker.io/n4pro/tr:latest"
-    ok "Protocol selected: TROJAN WS"
-    ;;
-esac
+# =================== Step 3: (Removed) Protocol Selection ===================
+# We will build a specific image, so no selection is needed.
+PROTO="trojan-ws (Custom Build)" 
+ok "Protocol: ${PROTO}"
 
 # =================== Step 4: Region ===================
 banner "🌍 Step 4 — Region Selection"
@@ -193,16 +179,16 @@ ok "Region: ${REGION} (US Central)"
 
 # =================== Step 5: Resources ===================
 banner "💪 Step 5 — Resources"
-echo "💡 Auto-set: 1 vCPU / 1Gi Memory (Optimized for Quota & Performance)"
-CPU="1"
-MEMORY="1Gi"
+echo "💡 Auto-set: 2 vCPU / 2Gi Memory (Optimized for Quota & Performance)"
+CPU="2"
+MEMORY="2Gi"
 CONCURRENCY="100"
 ok "CPU/Mem: ${CPU} vCPU / ${MEMORY}"
 ok "Concurrency: ${CONCURRENCY}"
 
 # =================== Step 6: Service Name ===================
 banner "🏷️ Step 6 — Service Name"
-SERVICE="ksgcp"
+SERVICE="ksgcp-custom" # Changed name to avoid conflict
 TIMEOUT="3600"
 PORT="${PORT:-8080}"
 ok "Auto-set Service Name: ${SERVICE}"
@@ -211,17 +197,11 @@ ok "Request Timeout: ${TIMEOUT}s"
 # =================== Step 7: Timezone Setup ===================
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
-
-# 5 hours 10 minutes (18600 seconds)
-END_EPOCH="$(( START_EPOCH + 18600 ))"       
-
-# 5 hours 12 minutes (18720 seconds)
-DELETE_EPOCH="$(( START_EPOCH + 18720 ))" 
-
+END_EPOCH="$(( START_EPOCH + 18600 ))" # 5 hours 10 minutes
+DELETE_EPOCH="$(( START_EPOCH + 18720 ))" # 5 hours 12 minutes
 START_LOCAL="$(fmt_dt "$START_EPOCH")"
 END_LOCAL="$(fmt_dt "$END_EPOCH")"
 DELETE_LOCAL="$(fmt_dt "$DELETE_EPOCH")"
-
 banner "⏰ Step 7 — Deployment Time"
 kv "Start:" "${START_LOCAL}"
 kv "End:" "${END_LOCAL} (5h 10m)"
@@ -229,15 +209,30 @@ kv "Auto-Delete:" "${DELETE_LOCAL} (5h 12m)"
 
 # =================== Step 8: Enable APIs ===================
 banner "🔧 Step 8 — Enable APIs"
-# Cloud Scheduler API removed as it is restricted
-run_with_progress "Enabling CloudRun & Build APIs" \
-  gcloud services enable run.googleapis.com cloudbuild.googleapis.com --quiet
+run_with_progress "Enabling Run, Build, & IAM APIs" \
+  gcloud services enable run.googleapis.com cloudbuild.googleapis.com iam.googleapis.com --quiet
 
-# =================== Step 9: Deploy ===================
-banner "🚀 Step 9 — Deploying to Cloud Run"
+# =================== Step 9: Build Custom Image ===================
+banner "📦 Step 9 — Building Custom Image"
+IMAGE_NAME="gcr.io/${PROJECT}/gcp-v2ray-image"
+echo "Cloning source from GitHub..."
+# Clean up repo directory if it already exists
+rm -rf gcp-v2ray
+git clone https://github.com/nyeinkokoaung404/gcp-v2ray.git >> "$LOG_FILE" 2>&1
+cd gcp-v2ray
+
+run_with_progress "Submitting build to Google Cloud Build" \
+  gcloud builds submit --tag "$IMAGE_NAME"
+
+# Go back to previous directory
+cd ..
+ok "Custom image built: ${IMAGE_NAME}"
+
+# =================== Step 10: Deploy ===================
+banner "🚀 Step 10 — Deploying to Cloud Run"
 echo "⏳ This may take 3-5 minutes..."
 gcloud run deploy "$SERVICE" \
-  --image="$IMAGE" \
+  --image="$IMAGE_NAME" \
   --platform=managed \
   --region="$REGION" \
   --memory="$MEMORY" \
@@ -252,8 +247,8 @@ gcloud run deploy "$SERVICE" \
 
 ok "Deployment completed"
 
-# =================== Step 10: Auto-Delete Setup ===================
-banner "🔄 Step 10 — Auto-Delete Setup"
+# =================== Step 11: Auto-Delete Setup ===================
+banner "🔄 Step 11 — Auto-Delete Setup"
 echo "⏰ Setting up auto-delete in ~5 hours..."
 
 CLEANUP_SCRIPT="/tmp/cleanup_${SERVICE}.sh"
@@ -270,7 +265,7 @@ CLEANUP_PID=$!
 
 ok "Auto-delete scheduled for: ${DELETE_LOCAL} (PID: ${CLEANUP_PID})"
 
-# =================== Step 11: Result ===================
+# =================== Step 12: Result ===================
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
 CANONICAL_HOST="${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
 URL_CANONICAL="https://${CANONICAL_HOST}"
@@ -280,32 +275,23 @@ kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
 kv "Active Until:" "${END_LOCAL}"
 kv "Resources:" "${CPU}vCPU / ${MEMORY}"
 
-# =================== Step 12: Generate Hidden URLs ===================
+# =================== Step 13: Generate Hidden URLs ===================
+# ASSUMPTION: The 'gcp-v2ray-image' is a Trojan-WS server
 TROJAN_PASS=$(decode_cfg "trojan_pass")
-VLESS_UUID_GRPC=$(decode_cfg "vless_uuid_grpc")
 WS_PATH=$(decode_cfg "ws_path")
-GRPC_SERVICE=$(decode_cfg "grpc_service")
 TLS_SNI=$(decode_cfg "tls_sni")
 CONN_PORT=$(decode_cfg "port")
 NETWORK_TYPE=$(decode_cfg "network")
 SECURITY_TYPE=$(decode_cfg "security")
 
 WS_PATH_ENCODED=$(echo "$WS_PATH" | sed 's|/|%2F|g')
+URI="trojan://${TROJAN_PASS}@${TLS_SNI}:${CONN_PORT}?path=${WS_PATH_ENCODED}&security=${SECURITY_TYPE}&host=${CANONICAL_HOST}&type=${NETWORK_TYPE}#Trojan-WS-Custom" 
 
-case "$PROTO" in
-  trojan-ws)  
-    URI="trojan://${TROJAN_PASS}@${TLS_SNI}:${CONN_PORT}?path=${WS_PATH_ENCODED}&security=${SECURITY_TYPE}&host=${CANONICAL_HOST}&type=${NETWORK_TYPE}#Trojan-WS" 
-    ;;
-  vless-grpc) 
-    URI="vless://${VLESS_UUID_GRPC}@${TLS_SNI}:${CONN_PORT}?mode=gun&security=${SECURITY_TYPE}&encryption=none&type=grpc&serviceName=${GRPC_SERVICE}&sni=${CANONICAL_HOST}#VLESS-gRPC" 
-    ;;
-esac
-
-# =================== Step 13: Telegram Notify ===================
-banner "📣 Step 13 — Telegram Notification"
+# =================== Step 14: Telegram Notify ===================
+banner "📣 Step 14 — Telegram Notification"
 
 MSG=$(cat <<EOF
-<blockquote>🚀 KSGCP V2RAY KEY</blockquote>
+<blockquote>🚀 KSGCP V2RAY KEY (Custom Build)</blockquote>
 <blockquote>⏰ 5-Hour Free Service</blockquote>
 <blockquote>📡 Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်!</blockquote>
 
@@ -317,10 +303,8 @@ EOF
 
 tg_send "${MSG}"
 
-# =================== Step 14: Keep-Alive Service (Local) ===================
-# REVERTED to local 'nohup' keep-alive due to Lab restrictions.
-# ⚠️ WARNING: You must keep this terminal (Cloud Shell) open!
-banner "🔋 Step 14 — Keep-Alive Service"
+# =================== Step 15: Keep-Alive Service (Local) ===================
+banner "🔋 Step 15 — Keep-Alive Service"
 
 KEEPALIVE_SCRIPT="/tmp/keepalive_${SERVICE}.sh"
 KEEPALIVE_LOG="/tmp/keepalive_${SERVICE}.log"
@@ -343,7 +327,7 @@ ok "Keep-alive service started (PID: ${KEEPALIVE_PID})"
 warn "⚠️ This process is running on YOUR machine. Keep this terminal open!"
 
 
-printf "\n${C_GREEN}${BOLD}✨ KSGCP ${PROTO^^} Deployed Successfully${RESET}\n"
+printf "\n${C_GREEN}${BOLD}✨ KSGCP ${PROTO} Deployed Successfully${RESET}\n"
 printf "${C_GREEN}${BOLD}💪 Resources: ${CPU}vCPU ${MEMORY}${RESET}\n"
 printf "${C_GREEN}${BOLD}⏰ 5-Hour Guaranteed Service | Auto-Delete Enabled${RESET}\n"
 printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
