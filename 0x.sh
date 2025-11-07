@@ -258,15 +258,12 @@ esac
 banner "📣 Step 10 — Telegram Notify"
 
 MSG=$(cat <<EOF
-<blockquote>🚀 KSGCP V2RAY KEY
-</blockquote>
-<blockquote>Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်
-</blockquote>
-
+<blockquote>🚀 KSGCP V2RAY KEY</blockquote>
+<blockquote>⏰ 5-Hour Free Service</blockquote>
+<blockquote>📡Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်</blockquote>
 <pre><code>${URI}</code></pre>
 
-<blockquote>⏳ End
-: <code>${END_LOCAL}</code></blockquote>
+<blockquote>⏳ End: <code>${END_LOCAL}</code></blockquote>
 EOF
 )
 
