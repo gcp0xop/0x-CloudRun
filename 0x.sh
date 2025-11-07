@@ -7,16 +7,16 @@ if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
 fi
 
 # ===== Logging & error handler =====
-LOG_FILE="/tmp/ksgcp_hybrid_$(date +%s).log"
+LOG_FILE="/tmp/ksgcp_cloudrun_$(date +%s).log"
 touch "$LOG_FILE"
 
 # ===== Error Handler =====
 on_err() {
   local rc=$?
   echo "" | tee -a "$LOG_FILE"
-  # This line 17 is just the SUMMARY of the error
   echo "❌ ERROR: Command failed (exit $rc) at line $LINENO: ${BASH_COMMAND}" | tee -a "$LOG_FILE" >&2
-  # The REAL error should have printed *before* this function was called.
+  echo "—— LOG (last 80 lines) ——" >&2
+  tail -n 80 "$LOG_FILE" >&2 || true
   echo "📄 Log File: $LOG_FILE" >&2
   exit $rc
 }
@@ -66,7 +66,9 @@ kv() {
 decode_cfg() { 
   case "$1" in
     "trojan_pass") echo "Trojan-2025" ;;
+    "vless_uuid_grpc") echo "0c890000-4733-4a0e-9a7f-fc341bd20000" ;;
     "ws_path") echo "/N4" ;;
+    "grpc_service") echo "n4-grpc" ;;
     "tls_sni") echo "vpn.googleapis.com" ;;
     "port") echo "443" ;;
     "network") echo "ws" ;;
@@ -81,7 +83,6 @@ run_with_progress() {
   echo "🔄 ${label}..."
   
   local start_time=$(date +%s)
-  # This function HIDES the real error messages in the log file.
   if "$@" >> "$LOG_FILE" 2>&1; then
     local end_time=$(date +%s)
     local total_time=$((end_time - start_time))
@@ -131,7 +132,7 @@ fmt_dt() {
 }
 
 # =================== Main Script Starts Here ===================
-printf "\n${C_CYAN}${BOLD}🚀 KSGCP Hybrid Deploy (Custom Image + Features)${RESET}\n"
+printf "\n${C_CYAN}${BOLD}🚀 KSGCP Cloud Run — High Performance Deploy${RESET}\n"
 hr
 
 # =================== Step 1: Telegram Config ===================
@@ -167,9 +168,23 @@ fi
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
 ok "Project Loaded: ${PROJECT}"
 
-# =================== Step 3: (Removed) Protocol Selection ===================
-PROTO="trojan-ws (Custom Build)" 
-ok "Protocol: ${PROTO}"
+# =================== Step 3: Protocol ===================
+banner "🧩 Step 3 — Protocol Selection"
+echo "  1️⃣ Trojan WS (Recommended)"
+echo "  2️⃣ VLESS gRPC (Alternative)"
+read -rp "Choose [1-2, default 1]: " _opt || true
+case "${_opt:-1}" in
+  2) 
+    PROTO="vless-grpc" 
+    IMAGE="docker.io/n4pro/vlessgrpc:latest"
+    ok "Protocol selected: VLESS gRPC"
+    ;;
+  *) 
+    PROTO="trojan-ws" 
+    IMAGE="docker.io/n4pro/tr:latest"
+    ok "Protocol selected: TROJAN WS"
+    ;;
+esac
 
 # =================== Step 4: Region ===================
 banner "🌍 Step 4 — Region Selection"
@@ -187,7 +202,7 @@ ok "Concurrency: ${CONCURRENCY}"
 
 # =================== Step 6: Service Name ===================
 banner "🏷️ Step 6 — Service Name"
-SERVICE="ksgcp-custom"
+SERVICE="ksgcp"
 TIMEOUT="3600"
 PORT="${PORT:-8080}"
 ok "Auto-set Service Name: ${SERVICE}"
@@ -196,11 +211,17 @@ ok "Request Timeout: ${TIMEOUT}s"
 # =================== Step 7: Timezone Setup ===================
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
-END_EPOCH="$(( START_EPOCH + 18600 ))" # 5 hours 10 minutes
-DELETE_EPOCH="$(( START_EPOCH + 18720 ))" # 5 hours 12 minutes
+
+# 5 hours 10 minutes (18600 seconds)
+END_EPOCH="$(( START_EPOCH + 18600 ))"       
+
+# 5 hours 12 minutes (18720 seconds)
+DELETE_EPOCH="$(( START_EPOCH + 18720 ))" 
+
 START_LOCAL="$(fmt_dt "$START_EPOCH")"
 END_LOCAL="$(fmt_dt "$END_EPOCH")"
 DELETE_LOCAL="$(fmt_dt "$DELETE_EPOCH")"
+
 banner "⏰ Step 7 — Deployment Time"
 kv "Start:" "${START_LOCAL}"
 kv "End:" "${END_LOCAL} (5h 10m)"
@@ -208,34 +229,16 @@ kv "Auto-Delete:" "${DELETE_LOCAL} (5h 12m)"
 
 # =================== Step 8: Enable APIs ===================
 banner "🔧 Step 8 — Enable APIs"
-run_with_progress "Enabling Run, Build, & IAM APIs" \
-  gcloud services enable run.googleapis.com cloudbuild.googleapis.com iam.googleapis.com --quiet
+run_with_progress "Enabling CloudRun & Build APIs" \
+  gcloud services enable run.googleapis.com cloudbuild.googleapis.com --quiet
 
-# =================== Step 9: Build Custom Image ===================
-banner "📦 Step 9 — Building Custom Image"
-IMAGE_NAME="gcr.io/${PROJECT}/gcp-v2ray-image"
-echo "Cloning source from GitHub..."
-rm -rf gcp-v2ray
-git clone https://github.com/nyeinkokoaung404/gcp-v2ray.git >> "$LOG_FILE" 2>&1
-cd gcp-v2ray
-
-# We keep this hidden in the log, as it was successful before
-run_with_progress "Submitting build to Google Cloud Build" \
-  gcloud builds submit --tag "$IMAGE_NAME"
-
-cd ..
-ok "Custom image built: ${IMAGE_NAME}"
-
-# =================== Step 10: Deploy ===================
-banner "🚀 Step 10 — Deploying to Cloud Run"
+# =================== Step 9: Deploy ===================
+banner "🚀 Step 9 — Deploying to Cloud Run"
 echo "⏳ This may take 3-5 minutes..."
-echo "   (Error messages will now appear directly below if they occur)"
 
-# ⭐️ FIXED: We are NOT using 'run_with_progress' here.
-# This forces the gcloud command to print its REAL error message
-# directly to the terminal (Cloud Shell) for us to see.
+# This command will print its REAL error message to the terminal if it fails
 gcloud run deploy "$SERVICE" \
-  --image="$IMAGE_NAME" \
+  --image="$IMAGE" \
   --platform=managed \
   --region="$REGION" \
   --memory="$MEMORY" \
@@ -250,8 +253,8 @@ gcloud run deploy "$SERVICE" \
 
 ok "Deployment completed"
 
-# =================== Step 11: Auto-Delete Setup ===================
-banner "🔄 Step 11 — Auto-Delete Setup"
+# =================== Step 10: Auto-Delete Setup ===================
+banner "🔄 Step 10 — Auto-Delete Setup"
 echo "⏰ Setting up auto-delete in ~5 hours..."
 
 CLEANUP_SCRIPT="/tmp/cleanup_${SERVICE}.sh"
@@ -268,32 +271,42 @@ CLEANUP_PID=$!
 
 ok "Auto-delete scheduled for: ${DELETE_LOCAL} (PID: ${CLEANUP_PID})"
 
-# =================== Step 12: Result ===================
+# =================== Step 11: Result ===================
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
 CANONICAL_HOST="${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
-URL_CANONICAL="https://S{CANONICAL_HOST}"
+URL_CANONICAL="https://${CANONICAL_HOST}"
 banner "✅ Result"
 ok "Service Ready"
 kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
 kv "Active Until:" "${END_LOCAL}"
 kv "Resources:" "${CPU}vCPU / ${MEMORY}"
 
-# =================== Step 13: Generate Hidden URLs ===================
+# =================== Step 12: Generate Hidden URLs ===================
 TROJAN_PASS=$(decode_cfg "trojan_pass")
+VLESS_UUID_GRPC=$(decode_cfg "vless_uuid_grpc")
 WS_PATH=$(decode_cfg "ws_path")
+GRPC_SERVICE=$(decode_cfg "grpc_service")
 TLS_SNI=$(decode_cfg "tls_sni")
 CONN_PORT=$(decode_cfg "port")
 NETWORK_TYPE=$(decode_cfg "network")
 SECURITY_TYPE=$(decode_cfg "security")
 
 WS_PATH_ENCODED=$(echo "$WS_PATH" | sed 's|/|%2F|g')
-URI="trojan://${TROJAN_PASS}@${TLS_SNI}:${CONN_PORT}?path=${WS_PATH_ENCODED}&security=${SECURITY_TYPE}&host=${CANONICAL_HOST}&type=${NETWORK_TYPE}#Trojan-WS-Custom" 
 
-# =================== Step 14: Telegram Notify ===================
-banner "📣 Step 14 — Telegram Notification"
+case "$PROTO" in
+  trojan-ws)  
+    URI="trojan://${TROJAN_PASS}@${TLS_SNI}:${CONN_PORT}?path=${WS_PATH_ENCODED}&security=${SECURITY_TYPE}&host=${CANONICAL_HOST}&type=${NETWORK_TYPE}#Trojan-WS" 
+    ;;
+  vless-grpc) 
+    URI="vless://${VLESS_UUID_GRPC}@${TLS_SNI}:${CONN_PORT}?mode=gun&security=${SECURITY_TYPE}&encryption=none&type=grpc&serviceName=${GRPC_SERVICE}&sni=${CANONICAL_HOST}#VLESS-gRPC" 
+    ;;
+esac
+
+# =================== Step 13: Telegram Notify ===================
+banner "📣 Step 13 — Telegram Notification"
 
 MSG=$(cat <<EOF
-<blockquote>🚀 KSGCP V2RAY KEY (Custom Build)</blockquote>
+<blockquote>🚀 KSGCP V2RAY KEY</blockquote>
 <blockquote>⏰ 5-Hour Free Service</blockquote>
 <blockquote>📡 Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်!</blockquote>
 
@@ -305,33 +318,16 @@ EOF
 
 tg_send "${MSG}"
 
-# =================== Step 15: Keep-Alive Service (Local) ===================
-banner "🔋 Step 15 — Keep-Alive Service"
-
-KEEPALIVE_SCRIPT="/tmp/keepalive_${SERVICE}.sh"
-KEEPALIVE_LOG="/tmp/keepalive_${SERVICE}.log"
-
-cat > "$KEEPALIVE_SCRIPT" << EOF
-#!/bin/bash
-echo "🔋 Starting keep-alive service..."
-while [[ \$(date +%s) -lt $END_EPOCH ]]; do
-  curl -s --connect-timeout 10 "https://${CANONICAL_HOST}" >/dev/null 2>&1
-  sleep 30
-done
-echo "🛑 Keep-alive stopped at \$(date)"
-EOF
-
-chmod +x "$KEEPALIVE_SCRIPT"
-nohup bash "$KEEPALIVE_SCRIPT" > "$KEEPALIVE_LOG" 2>&1 &
-KEEPALIVE_PID=$!
-
-ok "Keep-alive service started (PID: ${KEEPALIVE_PID})"
-warn "⚠️ This process is running on YOUR machine. Keep this terminal open!"
+# =================== Step 14: (REMOVED) Keep-Alive Service ===================
+# We are no longer using the local keep-alive script.
+# The '--min-instances=1' setting in Step 9 keeps the service alive.
+# You can now safely close your Cloud Shell.
+ok "✅ Service is set to --min-instances=1 (will not sleep)"
+ok "✅ You can safely close this terminal now."
 
 
-printf "\n${C_GREEN}${BOLD}✨ KSGCP ${PROTO} Deployed Successfully${RESET}\n"
+printf "\n${C_GREEN}${BOLD}✨ KSGCP ${PROTO^^} Deployed Successfully${RESET}\n"
 printf "${C_GREEN}${BOLD}💪 Resources: ${CPU}vCPU ${MEMORY}${RESET}\n"
 printf "${C_GREEN}${BOLD}⏰ 5-Hour Guaranteed Service | Auto-Delete Enabled${RESET}\n"
 printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
-printf "${C_GREY}🔧 Cleanup PID (On this machine): ${CLEANUP_PID}${RESET}\n"
-printf "${C_GREY}🔋 Keep-Alive PID (On this machine): ${KEEPALIVE_PID}${RESET}\n\n"
+printf "${C_GREY}🔧 Cleanup PID (On this machine): ${CLEANUP_PID}${RESET}\n\n"
