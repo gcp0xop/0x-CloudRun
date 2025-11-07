@@ -14,9 +14,9 @@ touch "$LOG_FILE"
 on_err() {
   local rc=$?
   echo "" | tee -a "$LOG_FILE"
+  # This line 17 is just the SUMMARY of the error
   echo "❌ ERROR: Command failed (exit $rc) at line $LINENO: ${BASH_COMMAND}" | tee -a "$LOG_FILE" >&2
-  echo "—— LOG (last 80 lines) ——" >&2
-  tail -n 80 "$LOG_FILE" >&2 || true
+  # The REAL error should have printed *before* this function was called.
   echo "📄 Log File: $LOG_FILE" >&2
   exit $rc
 }
@@ -63,7 +63,6 @@ kv() {
 }
 
 # =================== Hidden Configuration =====
-# Assuming the new 'gcp-v2ray-image' uses these hardcoded values
 decode_cfg() { 
   case "$1" in
     "trojan_pass") echo "Trojan-2025" ;;
@@ -82,6 +81,7 @@ run_with_progress() {
   echo "🔄 ${label}..."
   
   local start_time=$(date +%s)
+  # This function HIDES the real error messages in the log file.
   if "$@" >> "$LOG_FILE" 2>&1; then
     local end_time=$(date +%s)
     local total_time=$((end_time - start_time))
@@ -168,7 +168,6 @@ PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNum
 ok "Project Loaded: ${PROJECT}"
 
 # =================== Step 3: (Removed) Protocol Selection ===================
-# We will build a specific image, so no selection is needed.
 PROTO="trojan-ws (Custom Build)" 
 ok "Protocol: ${PROTO}"
 
@@ -179,7 +178,7 @@ ok "Region: ${REGION} (US Central)"
 
 # =================== Step 5: Resources ===================
 banner "💪 Step 5 — Resources"
-echo "💡 Auto-set: 2 vCPU / 2Gi Memory (Optimized for Quota & Performance)"
+echo "💡 Auto-set: 2 vCPU / 2Gi Memory (User Requested)"
 CPU="2"
 MEMORY="2Gi"
 CONCURRENCY="100"
@@ -188,7 +187,7 @@ ok "Concurrency: ${CONCURRENCY}"
 
 # =================== Step 6: Service Name ===================
 banner "🏷️ Step 6 — Service Name"
-SERVICE="ksgcp-custom" # Changed name to avoid conflict
+SERVICE="ksgcp-custom"
 TIMEOUT="3600"
 PORT="${PORT:-8080}"
 ok "Auto-set Service Name: ${SERVICE}"
@@ -216,21 +215,25 @@ run_with_progress "Enabling Run, Build, & IAM APIs" \
 banner "📦 Step 9 — Building Custom Image"
 IMAGE_NAME="gcr.io/${PROJECT}/gcp-v2ray-image"
 echo "Cloning source from GitHub..."
-# Clean up repo directory if it already exists
 rm -rf gcp-v2ray
 git clone https://github.com/nyeinkokoaung404/gcp-v2ray.git >> "$LOG_FILE" 2>&1
 cd gcp-v2ray
 
+# We keep this hidden in the log, as it was successful before
 run_with_progress "Submitting build to Google Cloud Build" \
   gcloud builds submit --tag "$IMAGE_NAME"
 
-# Go back to previous directory
 cd ..
 ok "Custom image built: ${IMAGE_NAME}"
 
 # =================== Step 10: Deploy ===================
 banner "🚀 Step 10 — Deploying to Cloud Run"
 echo "⏳ This may take 3-5 minutes..."
+echo "   (Error messages will now appear directly below if they occur)"
+
+# ⭐️ FIXED: We are NOT using 'run_with_progress' here.
+# This forces the gcloud command to print its REAL error message
+# directly to the terminal (Cloud Shell) for us to see.
 gcloud run deploy "$SERVICE" \
   --image="$IMAGE_NAME" \
   --platform=managed \
@@ -268,7 +271,7 @@ ok "Auto-delete scheduled for: ${DELETE_LOCAL} (PID: ${CLEANUP_PID})"
 # =================== Step 12: Result ===================
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
 CANONICAL_HOST="${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
-URL_CANONICAL="https://${CANONICAL_HOST}"
+URL_CANONICAL="https://S{CANONICAL_HOST}"
 banner "✅ Result"
 ok "Service Ready"
 kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
@@ -276,7 +279,6 @@ kv "Active Until:" "${END_LOCAL}"
 kv "Resources:" "${CPU}vCPU / ${MEMORY}"
 
 # =================== Step 13: Generate Hidden URLs ===================
-# ASSUMPTION: The 'gcp-v2ray-image' is a Trojan-WS server
 TROJAN_PASS=$(decode_cfg "trojan_pass")
 WS_PATH=$(decode_cfg "ws_path")
 TLS_SNI=$(decode_cfg "tls_sni")
