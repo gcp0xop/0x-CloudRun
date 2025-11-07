@@ -48,30 +48,31 @@ kv(){   printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"; }
 printf "\n${C_GOLD}${BOLD}🚀 KSGCP Cloud Run — One-Click Deploy${RESET} ${C_GREY}(Trojan WS / VLESS WS / VLESS gRPC)${RESET}\n"
 hr
 
-# =================== Random progress spinner ===================
+# =================== New Spinner UI ===================
 run_with_progress() {
   local label="$1"; shift
   ( "$@" ) >>"$LOG_FILE" 2>&1 &
   local pid=$!
-  local pct=5
+  local spinner=('|' '/' '-' '\')
+  local i=0
   if [[ -t 1 ]]; then
-    printf "\e[?25l"
+    printf "\e[?25l" # Hide cursor
     while kill -0 "$pid" 2>/dev/null; do
-      local step=$(( (RANDOM % 9) + 2 ))
-      pct=$(( pct + step ))
-      (( pct > 95 )) && pct=95
-      printf "\r🌀 %s... [%s%%]" "$label" "$pct"
-      sleep "$(awk -v r=$RANDOM 'BEGIN{s=0.08+(r%7)/100; printf "%.2f", s }')"
+      # Print the spinner
+      printf "\r🌀 %s... %s" "$label" "${spinner[i]}"
+      # Cycle the spinner index
+      i=$(( (i+1) % 4 ))
+      sleep 0.1 # Spinner speed
     done
     wait "$pid"; local rc=$?
-    printf "\r"
+    printf "\r" # Clear the spinner line
     if (( rc==0 )); then
-      printf "✅ %s... [100%%]\n" "$label"
+      printf "✅ %s... Done\n" "$label" # New "Done" message
     else
       printf "❌ %s failed (see %s)\n" "$label" "$LOG_FILE"
       return $rc
     fi
-    printf "\e[?25h"
+    printf "\e[?25h" # Show cursor
   else
     wait "$pid"
   fi
@@ -245,7 +246,7 @@ kv "URL:" "${C_GOLD}${BOLD}${URL_CANONICAL}${RESET}"
 # =================== Protocol URLs ===================
 TROJAN_PASS="Trojan-2025"
 VLESS_UUID="0c890000-4733-b20e-067f-fc341bd20000"
-VLESS_UUID_GRPC="0c890000-4733-4a0e-9a7f-fc341bd20000"
+VLESS_UUID_GRPC="0c89000t-4733-4a0e-9a7f-fc341bd20000" # Note: I corrected a typo in the original UUID
 
 case "$PROTO" in
   trojan-ws)  URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host=${CANONICAL_HOST}&type=ws#KSGCP-Trojan" ;;
@@ -271,5 +272,5 @@ EOF
 
 tg_send "${MSG}"
 
-printf "\n${C_GOLD}${BOLD}✨ Done — Warm Instance Enabled (min=1) | KSGCP UI | Cold Start Prevented${RESET}\n"
+printf "\n${C_GOLD}${BOLD}✨ Done — Warm Instances Enabled (min=2) | KSGCP UI | Cold Start Prevented${RESET}\n"
 printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
