@@ -191,8 +191,8 @@ ok "Region: ${REGION} (Auto-set)"
 
 # =================== Step 5: Resources (Auto-set) ===================
 banner "🧮 Step 5 — Resources"
-CPU="2"
-MEMORY="2Gi"
+CPU="1"
+MEMORY="1Gi"
 ok "CPU/Mem: ${CPU} vCPU / ${MEMORY} (Auto-set)"
 
 # =================== Step 6: Service Name ===================
