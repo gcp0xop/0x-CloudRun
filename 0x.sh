@@ -15,7 +15,6 @@ on_err() {
   local rc=$?
   echo "" | tee -a "$LOG_FILE"
   echo "❌ ERROR: Command failed (exit $rc) at line $LINENO: ${BASH_COMMAND}" | tee -a "$LOG_FILE" >&2
-  # This will now show the REAL error from the log file
   echo "—— LOG (last 80 lines) ——" >&2
   tail -n 80 "$LOG_FILE" >&2 || true
   echo "📄 Log File: $LOG_FILE" >&2
@@ -78,6 +77,26 @@ decode_cfg() {
   esac
 }
 
+# =================== Progress Function ===================
+run_with_progress() {
+  local label="$1"; shift
+  echo "🔄 ${label}..."
+  
+  local start_time=$(date +%s)
+  if "$@" >> "$LOG_FILE" 2>&1; then
+    local end_time=$(date +%s)
+    local total_time=$((end_time - start_time))
+    echo "✅ ${label} completed (${total_time}s)"
+    return 0
+  else
+    local rc=$?
+    local end_time=$(date +%s)
+    local total_time=$((end_time - start_time))
+    echo "❌ ${label} failed after ${total_time}s"
+    return $rc
+  fi
+}
+
 # =================== Telegram Function ===================
 json_escape() {
   printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\n/\\n/g' -e 's/\t/\\t/g' -e 's/\r//g'
@@ -98,10 +117,10 @@ tg_send() {
                     "$_cid" \
                     "$escaped_text")
     
-    # We will not hide the error message in the log file anymore
     curl -s -S -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
       -H "Content-Type: application/json" \
-      -d "${json_payload}"
+      -d "${json_payload}" \
+      >>"$LOG_FILE" 2>&1
       
     ok "Telegram sent → ${_cid}"
   done
@@ -113,14 +132,29 @@ fmt_dt() {
 }
 
 # =================== Main Script Starts Here ===================
-printf "\n${C_CYAN}${BOLD}🚀 KSGCP Cloud Run — Simplified Deploy${RESET}\n"
+printf "\n${C_CYAN}${BOLD}🚀 KSGCP Cloud Run — High Performance Deploy${RESET}\n"
 hr
 
 # =================== Step 1: Telegram Config ===================
 banner "🚀 Step 1 — Telegram Setup"
-read -rp "🤖 Telegram Bot Token: " TELEGRAM_TOKEN || true
-read -rp "👤 Owner/Channel Chat ID(s): " TELEGRAM_CHAT_IDS || true
-TELEGRAM_CHAT_IDS="${TELEGRAM_CHAT_IDS// /}"
+TELEGRAM_TOKEN="${TELEGRAM_TOKEN:-}"
+TELEGRAM_CHAT_IDS="${TELEGRAM_CHAT_IDS:-${TELEGRAM_CHAT_ID:-}}"
+
+if [[ ( -z "${TELEGRAM_TOKEN}" || -z "${TELEGRAM_CHAT_IDS}" ) && -f .env ]]; then
+  set -a; source ./.env; set +a
+fi
+
+read -rp "🤖 Telegram Bot Token: " _tk || true
+[[ -n "${_tk:-}" ]] && TELEGRAM_TOKEN="$_tk"
+if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then
+  warn "Telegram token empty; deploy will continue without messages."
+else
+  ok "Telegram token captured."
+fi
+
+read -rp "👤 Owner/Channel Chat ID(s): " _ids || true
+[[ -n "${_ids:-}" ]] && TELEGRAM_CHAT_IDS="${_ids// /}"
+
 CHAT_ID_ARR=()
 IFS=',' read -r -a CHAT_ID_ARR <<< "${TELEGRAM_CHAT_IDS:-}" || true
 
@@ -131,7 +165,7 @@ if [[ -z "$PROJECT" ]]; then
   err "No active project. Run: gcloud config set project <YOUR_PROJECT_ID>"
   exit 1
 fi
-PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
 ok "Project Loaded: ${PROJECT}"
 
 # =================== Step 3: Protocol ===================
@@ -159,7 +193,7 @@ ok "Region: ${REGION} (US Central)"
 
 # =================== Step 5: Resources ===================
 banner "💪 Step 5 — Resources"
-echo "💡 Auto-set: 2 vCPU / 2Gi Memory (User Requested)"
+echo "💡 Auto-set: 2 vCPU / 2Gi Memory (Optimized for Quota & Performance)"
 CPU="2"
 MEMORY="2Gi"
 CONCURRENCY="100"
@@ -177,22 +211,30 @@ ok "Request Timeout: ${TIMEOUT}s"
 # =================== Step 7: Timezone Setup ===================
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
-# We only need the current time for the message
+
+# 5 hours 10 minutes (18600 seconds)
+END_EPOCH="$(( START_EPOCH + 18600 ))"       
+
+# 5 hours 12 minutes (18720 seconds)
+DELETE_EPOCH="$(( START_EPOCH + 18720 ))" 
+
 START_LOCAL="$(fmt_dt "$START_EPOCH")"
+END_LOCAL="$(fmt_dt "$END_EPOCH")"
+DELETE_LOCAL="$(fmt_dt "$DELETE_EPOCH")"
+
 banner "⏰ Step 7 — Deployment Time"
 kv "Start:" "${START_LOCAL}"
+kv "End:" "${END_LOCAL} (5h 10m)"
+kv "Auto-Delete:" "${DELETE_LOCAL} (5h 12m)"
 
-# =================== STEP 8: (REMOVED) Enable APIs ===================
-# This step was causing the 'Permission Denied' error.
-# We assume the Lab has enabled these APIs already.
-ok "Skipping API Enable (Assuming Lab default)"
+# =================== Step 8: Enable APIs ===================
+banner "🔧 Step 8 — Enable APIs"
+run_with_progress "Enabling CloudRun & Build APIs" \
+  gcloud services enable run.googleapis.com cloudbuild.googleapis.com --quiet
 
-# =================== Step 8: Deploy (Was Step 9) ===================
-banner "🚀 Step 8 — Deploying to Cloud Run"
+# =================== Step 9: Deploy ===================
+banner "🚀 Step 9 — Deploying to Cloud Run"
 echo "⏳ This may take 3-5 minutes..."
-echo "   (Error messages will now appear directly below if they occur)"
-
-# This command will print its REAL error message to the terminal if it fails
 gcloud run deploy "$SERVICE" \
   --image="$IMAGE" \
   --platform=managed \
@@ -209,20 +251,35 @@ gcloud run deploy "$SERVICE" \
 
 ok "Deployment completed"
 
-# =================== STEP 9: (REMOVED) Auto-Delete ===================
-# This step was unreliable and not needed for a Lab.
-ok "Skipping Auto-Delete (Lab will auto-clean)"
+# =================== Step 10: Auto-Delete Setup ===================
+banner "🔄 Step 10 — Auto-Delete Setup"
+echo "⏰ Setting up auto-delete in ~5 hours..."
 
-# =================== Step 9: Result (Was Step 11) ===================
-PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
+CLEANUP_SCRIPT="/tmp/cleanup_${SERVICE}.sh"
+cat > "$CLEANUP_SCRIPT" << EOF
+#!/bin/bash
+sleep $((DELETE_EPOCH - $(date +%s)))
+gcloud run services delete "$SERVICE" --region="$REGION" --quiet
+echo "✅ Auto-deleted service: $SERVICE at \$(date)"
+EOF
+
+chmod +x "$CLEANUP_SCRIPT"
+nohup bash "$CLEANUP_SCRIPT" > /tmp/cleanup_${SERVICE}.log 2>&1 &
+CLEANUP_PID=$!
+
+ok "Auto-delete scheduled for: ${DELETE_LOCAL} (PID: ${CLEANUP_PID})"
+
+# =================== Step 11: Result ===================
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
 CANONICAL_HOST="${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
-URL_CANONICAL="https://S{CANONICAL_HOST}"
+URL_CANONICAL="https://${CANONICAL_HOST}"
 banner "✅ Result"
 ok "Service Ready"
 kv "URL:" "${C_CYAN}${BOLD}${URL_CANONICAL}${RESET}"
+kv "Active Until:" "${END_LOCAL}"
 kv "Resources:" "${CPU}vCPU / ${MEMORY}"
 
-# =================== Step 10: Generate Hidden URLs (Was Step 12) ===================
+# =================== Step 12: Generate Hidden URLs ===================
 TROJAN_PASS=$(decode_cfg "trojan_pass")
 VLESS_UUID_GRPC=$(decode_cfg "vless_uuid_grpc")
 WS_PATH=$(decode_cfg "ws_path")
@@ -243,26 +300,49 @@ case "$PROTO" in
     ;;
 esac
 
-# =================== Step 11: Telegram Notify (Was Step 13) ===================
-banner "📣 Step 11 — Telegram Notification"
+# =================== Step 13: Telegram Notify ===================
+banner "📣 Step 13 — Telegram Notification"
 
 MSG=$(cat <<EOF
 <blockquote>🚀 KSGCP V2RAY KEY</blockquote>
-<blockquote>(Service will run for Lab duration)</blockquote>
+<blockquote>⏰ 5-Hour Free Service</blockquote>
 <blockquote>📡 Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်!</blockquote>
 
 <pre><code>${URI}</code></pre>
 
-<blockquote>⏳ Start: <code>${START_LOCAL}</code></blockquote>
+<blockquote>⏳ End: <code>${END_LOCAL}</code></blockquote>
 EOF
 )
 
 tg_send "${MSG}"
 
-# =================== STEP 12: (REMOVED) Keep-Alive Service ===================
-ok "✅ Service is set to --min-instances=1 (will not sleep)"
+# =================== Step 14: Keep-Alive Service ===================
+banner "🔋 Step 14 — Keep-Alive Service"
+
+KEEPALIVE_SCRIPT="/tmp/keepalive_${SERVICE}.sh"
+KEEPALIVE_LOG="/tmp/keepalive_${SERVICE}.log"
+
+cat > "$KEEPALIVE_SCRIPT" << EOF
+#!/bin/bash
+echo "🔋 Starting keep-alive service..."
+while [[ \$(date +%s) -lt $END_EPOCH ]]; do
+  curl -s --connect-timeout 10 "https://${CANONICAL_HOST}" >/dev/null 2>&1
+  sleep 30
+done
+echo "🛑 Keep-alive stopped at \$(date)"
+EOF
+
+chmod +x "$KEEPALIVE_SCRIPT"
+nohup bash "$KEEPALIVE_SCRIPT" > "$KEEPALIVE_LOG" 2>&1 &
+KEEPALIVE_PID=$!
+
+ok "Keep-alive service started (PID: ${KEEPALIVE_PID})"
+echo "   (This prevents the service from idling)"
 
 
 printf "\n${C_GREEN}${BOLD}✨ KSGCP ${PROTO^^} Deployed Successfully${RESET}\n"
 printf "${C_GREEN}${BOLD}💪 Resources: ${CPU}vCPU ${MEMORY}${RESET}\n"
-printf "${C_GREEN}${BOLD}✅ You can SAFELY CLOSE this terminal now.${RESET}\n\n"
+printf "${C_GREEN}${BOLD}⏰ 5-Hour Guaranteed Service | Auto-Delete Enabled${RESET}\n"
+printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
+printf "${C_GREY}🔧 Cleanup PID: ${CLEANUP_PID}${RESET}\n"
+printf "${C_GREY}🔋 Keep-Alive PID: ${KEEPALIVE_PID}${RESET}\n\n1Giii
