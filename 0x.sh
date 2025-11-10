@@ -99,7 +99,7 @@ read -rp "👤 Owner/Channel Chat ID(s): " _ids || true
 [[ -n "${_ids:-}" ]] && TELEGRAM_CHAT_IDS="${_ids// /}"
 
 DEFAULT_LABEL="Join KSGCP Channel"
-DEFAULT_URL="https://t.me/ksgcp_channel" # <-- Placeholder URL
+DEFAULT_URL="https://t.me/KS_GCP" # <-- Placeholder URL
 BTN_LABELS=(); BTN_URLS=()
 
 read -rp "➕ Add URL button(s)? [y/N]: " _addbtn || true
@@ -232,7 +232,7 @@ run_with_progress "Deploying ${SERVICE}" \
     --timeout="$TIMEOUT" \
     --allow-unauthenticated \
     --port="$PORT" \
-    --min-instances=1 \
+    --min-instances=2 \
     --quiet
 
 # =================== Result ===================
