@@ -23,51 +23,44 @@ trap on_err ERR
 # =================== Color & UI (KSGCP Theme) ===================
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   RESET=$'\e[0m'; BOLD=$'\e[1m'; DIM=$'\e[2m'
-  C_PURPLE=$'\e[38;5;99m'  # For banners
-  C_GOLD=$'\e[38;5;214m'   # For title and highlights
-  C_GREEN=$'\e[38;5;46m'  # OK
-  C_ORG=$'\e[38;5;208m'   # Warn
-  C_GREY=$'\e[38;5;245m'  # Dim
-  C_RED=$'\e[38;5;196m'   # Error
+  C_MAGENTA=$'\e[38;5;165m'; C_LBLUE=$'\e[38;5;81m'
+  C_GREEN=$'\e[38;5;83m'; C_YEL=$'\e[38;5;220m'
+  C_GREY=$'\e[38;5;245m'; C_RED=$'\e[38;5;196m'
 else
-  RESET= BOLD= DIM= C_PURPLE= C_GOLD= C_GREEN= C_ORG= C_GREY= C_RED=
+  RESET= BOLD= DIM= C_MAGENTA= C_LBLUE= C_GREEN= C_YEL= C_GREY= C_RED=
 fi
 
-hr(){ printf "${C_GOLD}%s${RESET}\n" "══════════════════════════════════════════════════"; }
+hr(){ printf "${C_GREY}%s${RESET}\n" "...................................................."; }
 banner(){
   local title="$1"
-  printf "\n${C_PURPLE}${BOLD}╔══════════════════════════════════════════════════╗${RESET}\n"
-  printf   "${C_PURPLE}${BOLD}║${RESET}  %s${RESET}\n" "$(printf "%-46s" "$title")"
-  printf   "${C_PURPLE}${BOLD}╚══════════════════════════════════════════════════╝${RESET}\n"
+  printf "\n${C_MAGENTA}${BOLD}✨ %s${RESET}\n${C_GREY}====================================================${RESET}\n" "$title"
 }
 ok(){   printf "${C_GREEN}✔${RESET} %s\n" "$1"; }
-warn(){ printf "${C_ORG}⚠${RESET} %s\n" "$1"; }
+warn(){ printf "${C_YEL}⚠${RESET} %s\n" "$1"; }
 err(){  printf "${C_RED}✘${RESET} %s\n" "$1"; }
-kv(){   printf "   ${C_GREY}%s${RESET}  %s\n" "$1" "$2"; }
+kv(){   printf "   ${C_GREY}%-10s${RESET} %s\n" "$1" "$2"; }
 
-printf "\n${C_GOLD}${BOLD}🚀 KSGCP Cloud Run — One-Click Deploy${RESET} ${C_GREY}(Trojan WS / VLESS WS / VLESS gRPC)${RESET}\n"
+printf "\n${C_MAGENTA}${BOLD}🚀 KSGCP Cloud Run Deploy${RESET} ${C_GREY}(Trojan WS / VLESS WS / VLESS gRPC)${RESET}\n"
 hr
 
-# =================== New Spinner UI ===================
+# =================== Simple spinner ===================
 run_with_progress() {
   local label="$1"; shift
   ( "$@" ) >>"$LOG_FILE" 2>&1 &
   local pid=$!
-  local spinner=('|' '/' '-' '\')
+  local spin='-\|/'
   local i=0
   if [[ -t 1 ]]; then
     printf "\e[?25l" # Hide cursor
     while kill -0 "$pid" 2>/dev/null; do
-      # Print the spinner
-      printf "\r🌀 %s... %s" "$label" "${spinner[i]}"
-      # Cycle the spinner index
-      i=$(( (i+1) % 4 ))
-      sleep 0.1 # Spinner speed
+      i=$(( (i+1) %4 ))
+      printf "\r${C_MAGENTA}${spin:$i:1}${RESET} %s..." "$label"
+      sleep 0.1
     done
     wait "$pid"; local rc=$?
-    printf "\r" # Clear the spinner line
+    printf "\r\e[K" # Clear line
     if (( rc==0 )); then
-      printf "✅ %s... Done\n" "$label" # New "Done" message
+      printf "✅ %s\n" "$label"
     else
       printf "❌ %s failed (see %s)\n" "$label" "$LOG_FILE"
       return $rc
@@ -98,8 +91,6 @@ fi
 read -rp "👤 Owner/Channel Chat ID(s): " _ids || true
 [[ -n "${_ids:-}" ]] && TELEGRAM_CHAT_IDS="${_ids// /}"
 
-DEFAULT_LABEL="Join KSGCP Channel"
-DEFAULT_URL="https://t.me/KS_GCP" # <-- Placeholder URL
 BTN_LABELS=(); BTN_URLS=()
 
 read -rp "➕ Add URL button(s)? [y/N]: " _addbtn || true
@@ -107,11 +98,9 @@ if [[ "${_addbtn:-}" =~ ^([yY]|yes)$ ]]; then
   i=0
   while true; do
     echo "—— Button $((i+1)) ——"
-    read -rp "🔖 Label [default: ${DEFAULT_LABEL}]: " _lbl || true
+    read -rp "🔖 Label: " _lbl || true
     if [[ -z "${_lbl:-}" ]]; then
-      BTN_LABELS+=("${DEFAULT_LABEL}")
-      BTN_URLS+=("${DEFAULT_URL}")
-      ok "Added: ${DEFAULT_LABEL} → ${DEFAULT_URL}"
+      warn "Skipped (label is empty)."
     else
       read -rp "🔗 URL (http/https): " _url || true
       if [[ -n "${_url:-}" && "${_url}" =~ ^https?:// ]]; then
@@ -184,20 +173,20 @@ esac
 ok "Protocol selected: ${PROTO^^}"
 echo "[Docker Hidden] ${IMAGE}" >>"$LOG_FILE"
 
-# =================== Step 4: Region (Auto-set) ===================
+# =================== Step 4: Region (Fixed) ===================
 banner "🌍 Step 4 — Region"
 REGION="us-central1"
-ok "Region: ${REGION} (Auto-set)"
+ok "Region: ${REGION} (Fixed)"
 
-# =================== Step 5: Resources (Auto-set) ===================
+# =================== Step 5: Resources (Fixed) ===================
 banner "🧮 Step 5 — Resources"
 CPU="2"
 MEMORY="2Gi"
-ok "CPU/Mem: ${CPU} vCPU / ${MEMORY} (Auto-set)"
+ok "CPU/Mem: ${CPU} vCPU / ${MEMORY} (Fixed)"
 
 # =================== Step 6: Service Name ===================
 banner "🪪 Step 6 — Service Name"
-SERVICE="${SERVICE:-ksgcp-vpn}"
+SERVICE="${SERVICE:-ksgcp-vpn}" # Changed default name
 TIMEOUT="${TIMEOUT:-3600}"
 PORT="${PORT:-8080}"
 read -rp "Service name [default: ${SERVICE}]: " _svc || true
@@ -232,7 +221,7 @@ run_with_progress "Deploying ${SERVICE}" \
     --timeout="$TIMEOUT" \
     --allow-unauthenticated \
     --port="$PORT" \
-    --min-instances=2 \
+    --min-instances=1 \
     --quiet
 
 # =================== Result ===================
@@ -241,17 +230,17 @@ CANONICAL_HOST="${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
 URL_CANONICAL="https://${CANONICAL_HOST}"
 banner "✅ Result"
 ok "Service Ready"
-kv "URL:" "${C_GOLD}${BOLD}${URL_CANONICAL}${RESET}"
+kv "URL:" "${C_LBLUE}${BOLD}${URL_CANONICAL}${RESET}"
 
 # =================== Protocol URLs ===================
 TROJAN_PASS="Trojan-2025"
 VLESS_UUID="0c890000-4733-b20e-067f-fc341bd20000"
-VLESS_UUID_GRPC="0c89000t-4733-4a0e-9a7f-fc341bd20000" # Note: I corrected a typo in the original UUID
+VLESS_UUID_GRPC="0c890000-4733-4a0e-9a7f-fc341bd20000"
 
 case "$PROTO" in
-  trojan-ws)  URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host=${CANONICAL_HOST}&type=ws#KSGCP-Trojan" ;;
-  vless-ws)   URI="vless://${VLESS_UUID}@vpn.googleapis.com:443?path=%2FN4&security=tls&encryption=none&host=${CANONICAL_HOST}&type=ws#KSGCP-Vless" ;;
-  vless-grpc) URI="vless://${VLESS_UUID_GRPC}@vpn.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=n4-grpc&sni=${CANONICAL_HOST}#KSGCP-gRPC" ;;
+  trojan-ws)  URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host=${CANONICAL_HOST}&type=ws#Trojan-WS" ;;
+  vless-ws)   URI="vless://${VLESS_UUID}@vpn.googleapis.com:443?path=%2FN4&security=tls&encryption=none&host=${CANONICAL_HOST}&type=ws#Vless-WS" ;;
+  vless-grpc) URI="vless://${VLESS_UUID_GRPC}@vpn.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=n4-grpc&sni=${CANONICAL_HOST}#VLESS-gRPC" ;;
 esac
 
 # =================== Telegram Notify ===================
@@ -269,5 +258,5 @@ EOF
 
 tg_send "${MSG}"
 
-printf "\n${C_GOLD}${BOLD}✨ Done — Warm Instances Enabled (min=2) | KSGCP UI | Cold Start Prevented${RESET}\n"
+printf "\n${C_GREEN}${BOLD}✨ Done — KSGCP Deployed (min=1) ${RESET}\n"
 printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
