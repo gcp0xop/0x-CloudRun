@@ -21,18 +21,25 @@ C_GREY=$'\e[38;5;240m'
 
 banner(){ printf "\n${C_PINK}${BOLD}✨ %s${RESET}\n${C_CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n" "$1"; }
 ok(){ printf "   ${C_LIME}✔${RESET} %s\n" "$1"; }
-warn(){ printf "   ${C_YELLOW}⚠${RESET} %s\n" "$1"; }
 kv(){ printf "   ${C_CYAN}➤ %-12s${RESET} %s\n" "$1" "$2"; }
 
 clear
-printf "\n${C_CYAN}${BOLD}🚀 ALPHA 0x1 DEPLOYER${RESET} ${C_GREY}(Custom Image)${RESET}\n"
+printf "\n${C_CYAN}${BOLD}🚀 ALPHA 0x1 DEPLOYER${RESET}\n"
 
-# =================== CONFIGURATION (FIXED) ===================
-# ခင်ဗျားရဲ့ Docker Image ထဲကအတိုင်း အတိအကျ ထည့်ပေးထားပါတယ်
+# =================== CONFIGURATION ===================
 TROJAN_PASS="Alpha-Troj-888"
 VLESS_UUID="74272911-3470-495c-8573-240395115189"
 SERVICE_NAME_GRPC="Alpha0x1"
-IMAGE="docker.io/a0x1/3-in-1:v1"  # <--- ခင်ဗျားရဲ့ Image
+IMAGE="docker.io/a0x1/3-in-1:v1"
+
+# =================== Time Setup ===================
+export TZ="Asia/Yangon"
+START_EPOCH="$(date +%s)"
+fmt_dt(){ date -d @"$1" "+%d.%m.%Y %I:%M %p"; }
+fmt_time(){ date -d @"$1" "+%I:%M %p"; }
+
+START_FULL="$(fmt_dt "$START_EPOCH")"
+JUST_TIME="$(fmt_time "$START_EPOCH")"
 
 # =================== Telegram Setup ===================
 banner "🤖 Telegram Setup"
@@ -50,9 +57,12 @@ fi
 
 tg_send(){
   [[ -z "$TELEGRAM_TOKEN" || -z "$TELEGRAM_CHAT_IDS" ]] && return
+  local msg_text="$1"
   for cid in ${TELEGRAM_CHAT_IDS//,/ }; do
     curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-      -d "chat_id=$cid" -d "text=$1" -d "parse_mode=HTML" >/dev/null 2>&1 || true
+      -d "chat_id=$cid" \
+      --data-urlencode "text=$msg_text" \
+      -d "parse_mode=HTML" >/dev/null 2>&1 || true
   done
 }
 
@@ -74,7 +84,6 @@ read -rp "   Select [1-3]: " OPTION
 
 # =================== Deploy ===================
 banner "🚀 Deploying Alpha0x1..."
-# Service Name ကို Alpha0x1 လို့ ပေးထားပါတယ်
 SERVICE="Alpha0x1"
 REGION="us-central1"
 
@@ -117,8 +126,17 @@ echo ""
 echo -e "${C_LIME}${URI}${RESET}"
 
 # =================== Notify ===================
-TIME=$(date '+%I:%M %p')
-MSG="<b>🚀 Alpha 0x1 Server Active</b>%0A%0A<b>Protocol:</b> ${PROTO_NAME}%0A<b>Domain:</b> ${HOST}%0A<b>Time:</b> ${TIME}%0A%0A<pre>${URI}</pre>"
+MSG=$(cat <<EOF
+<blockquote>🚀 ALPHA 0x1 SERVICE</blockquote>
+<blockquote>💎 Premium Server Active</blockquote>
+<blockquote>📡 Mytel 4G Supported</blockquote>
+<pre><code>${URI}</code></pre>
+
+<blockquote>⏰ Time: <code>${JUST_TIME}</code></blockquote>
+<blockquote>📅 Start Time: <code>${START_FULL}</code></blockquote>
+EOF
+)
+
 tg_send "$MSG"
 
 printf "\n${C_GREY}📄 Log saved to ${LOG_FILE}${RESET}\n"
