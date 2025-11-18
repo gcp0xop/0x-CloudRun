@@ -11,13 +11,9 @@ LOG_FILE="/tmp/alpha0x1_deploy.log"
 touch "$LOG_FILE"
 
 # =================== Color UI ===================
-RESET=$'\e[0m'
-BOLD=$'\e[1m'
-C_CYAN=$'\e[38;5;51m'
-C_LIME=$'\e[38;5;118m'
-C_PINK=$'\e[38;5;201m'
-C_YELLOW=$'\e[38;5;226m'
-C_GREY=$'\e[38;5;240m'
+RESET=$'\e[0m'; BOLD=$'\e[1m'
+C_CYAN=$'\e[38;5;51m'; C_LIME=$'\e[38;5;118m'
+C_PINK=$'\e[38;5;201m'; C_GREY=$'\e[38;5;240m'
 
 banner(){ printf "\n${C_PINK}${BOLD}✨ %s${RESET}\n${C_CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n" "$1"; }
 ok(){ printf "   ${C_LIME}✔${RESET} %s\n" "$1"; }
@@ -37,7 +33,6 @@ export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
 fmt_dt(){ date -d @"$1" "+%d.%m.%Y %I:%M %p"; }
 fmt_time(){ date -d @"$1" "+%I:%M %p"; }
-
 START_FULL="$(fmt_dt "$START_EPOCH")"
 JUST_TIME="$(fmt_time "$START_EPOCH")"
 
@@ -84,11 +79,12 @@ read -rp "   Select [1-3]: " OPTION
 
 # =================== Deploy ===================
 banner "🚀 Deploying Alpha0x1..."
-# Service Name ကို အသေးပြောင်းလိုက်ပါပြီ (alpha0x1)
 SERVICE="alpha0x1"
 REGION="us-central1"
 
 gcloud services enable run.googleapis.com --quiet >/dev/null 2>&1
+
+# Note: Added --use-http2 for gRPC support
 gcloud run deploy "$SERVICE" \
   --image="$IMAGE" \
   --platform=managed \
@@ -96,6 +92,7 @@ gcloud run deploy "$SERVICE" \
   --memory="2Gi" \
   --cpu="2" \
   --allow-unauthenticated \
+  --use-http2 \
   --port=8080 \
   --min-instances=1 \
   --quiet >"$LOG_FILE" 2>&1
@@ -139,5 +136,4 @@ EOF
 )
 
 tg_send "$MSG"
-
 printf "\n${C_GREY}📄 Log saved to ${LOG_FILE}${RESET}\n"
