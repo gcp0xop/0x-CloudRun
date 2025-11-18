@@ -84,7 +84,8 @@ read -rp "   Select [1-3]: " OPTION
 
 # =================== Deploy ===================
 banner "🚀 Deploying Alpha0x1..."
-SERVICE="Alpha0x1"
+# Service Name ကို အသေးပြောင်းလိုက်ပါပြီ (alpha0x1)
+SERVICE="alpha0x1"
 REGION="us-central1"
 
 gcloud services enable run.googleapis.com --quiet >/dev/null 2>&1
