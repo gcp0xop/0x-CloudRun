@@ -20,27 +20,37 @@ on_err() {
 }
 trap on_err ERR
 
-# =================== Color & UI (KSGCP Theme) ===================
+# =================== Color & UI (Neon/Rainbow Theme) ===================
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
-  RESET=$'\e[0m'; BOLD=$'\e[1m'; DIM=$'\e[2m'
-  C_MAGENTA=$'\e[38;5;165m'; C_LBLUE=$'\e[38;5;81m'
-  C_GREEN=$'\e[38;5;83m'; C_YEL=$'\e[38;5;220m'
-  C_GREY=$'\e[38;5;245m'; C_RED=$'\e[38;5;196m'
+  RESET=$'\e[0m'
+  BOLD=$'\e[1m'
+  
+  # Neon Palette
+  C_PINK=$'\e[38;5;201m'
+  C_CYAN=$'\e[38;5;51m'
+  C_LIME=$'\e[38;5;118m'
+  C_ORANGE=$'\e[38;5;214m'
+  C_PURPLE=$'\e[38;5;135m'
+  C_YELLOW=$'\e[38;5;226m'
+  C_WHITE=$'\e[38;5;255m'
+  C_RED=$'\e[38;5;196m'
+  C_GREY=$'\e[38;5;240m'
 else
-  RESET= BOLD= DIM= C_MAGENTA= C_LBLUE= C_GREEN= C_YEL= C_GREY= C_RED=
+  RESET= BOLD= C_PINK= C_CYAN= C_LIME= C_ORANGE= C_PURPLE= C_YELLOW= C_WHITE= C_RED= C_GREY=
 fi
 
-hr(){ printf "${C_GREY}%s${RESET}\n" "...................................................."; }
+hr(){ printf "${C_GREY}%s${RESET}\n" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; }
 banner(){
   local title="$1"
-  printf "\n${C_MAGENTA}${BOLD}✨ %s${RESET}\n${C_GREY}====================================================${RESET}\n" "$title"
+  printf "\n${C_PINK}${BOLD}✨ %s${RESET}\n${C_CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n" "$title"
 }
-ok(){   printf "${C_GREEN}✔${RESET} %s\n" "$1"; }
-warn(){ printf "${C_YEL}⚠${RESET} %s\n" "$1"; }
-err(){  printf "${C_RED}✘${RESET} %s\n" "$1"; }
-kv(){   printf "   ${C_GREY}%-10s${RESET} %s\n" "$1" "$2"; }
+ok(){   printf "   ${C_LIME}✔${RESET} %s\n" "$1"; }
+warn(){ printf "   ${C_ORANGE}⚠${RESET} %s\n" "$1"; }
+err(){  printf "   ${C_RED}✘${RESET} %s\n" "$1"; }
+kv(){   printf "   ${C_CYAN}➤ %-12s${RESET} ${C_WHITE}%s${RESET}\n" "$1" "$2"; }
 
-printf "\n${C_MAGENTA}${BOLD}🚀 KSGCP Cloud Run Deploy${RESET} ${C_GREY}(Trojan WS / VLESS WS / VLESS gRPC)${RESET}\n"
+clear
+printf "\n${C_PURPLE}${BOLD}🚀 KSGCP CLOUD RUN DEPLOYER${RESET} ${C_ORANGE}(Premium Edition)${RESET}\n"
 hr
 
 # =================== Simple spinner ===================
@@ -48,21 +58,21 @@ run_with_progress() {
   local label="$1"; shift
   ( "$@" ) >>"$LOG_FILE" 2>&1 &
   local pid=$!
-  local spin='-\|/'
+  local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
   local i=0
   if [[ -t 1 ]]; then
     printf "\e[?25l" # Hide cursor
     while kill -0 "$pid" 2>/dev/null; do
-      i=$(( (i+1) %4 ))
-      printf "\r${C_MAGENTA}${spin:$i:1}${RESET} %s..." "$label"
+      i=$(( (i+1) %10 ))
+      printf "\r   ${C_YELLOW}${spin:$i:1}${RESET} %s..." "$label"
       sleep 0.1
     done
     wait "$pid"; local rc=$?
     printf "\r\e[K" # Clear line
     if (( rc==0 )); then
-      printf "✅ %s\n" "$label"
+      printf "   ${C_LIME}✅${RESET} %s\n" "$label"
     else
-      printf "❌ %s failed (see %s)\n" "$label" "$LOG_FILE"
+      printf "   ${C_RED}❌${RESET} %s failed (see %s)\n" "$label" "$LOG_FILE"
       return $rc
     fi
     printf "\e[?25h" # Show cursor
@@ -72,7 +82,7 @@ run_with_progress() {
 }
 
 # =================== Step 1: Telegram Config ===================
-banner "🚀 Step 1 — Telegram Setup"
+banner "🤖 Step 1 — Telegram Setup"
 TELEGRAM_TOKEN="${TELEGRAM_TOKEN:-}"
 TELEGRAM_CHAT_IDS="${TELEGRAM_CHAT_IDS:-${TELEGRAM_CHAT_ID:-}}"
 
@@ -80,40 +90,40 @@ if [[ ( -z "${TELEGRAM_TOKEN}" || -z "${TELEGRAM_CHAT_IDS}" ) && -f .env ]]; the
   set -a; source ./.env; set +a
 fi
 
-read -rp "🤖 Telegram Bot Token: " _tk || true
+read -rp "   ${C_PURPLE}💎 Bot Token:${RESET} " _tk || true
 [[ -n "${_tk:-}" ]] && TELEGRAM_TOKEN="$_tk"
 if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then
-  warn "Telegram token empty; deploy will continue without messages."
+  warn "Token empty! No notifications will be sent."
 else
-  ok "Telegram token captured."
+  ok "Token saved."
 fi
 
-read -rp "👤 Owner/Channel Chat ID(s): " _ids || true
+read -rp "   ${C_PURPLE}💎 Chat ID:${RESET}   " _ids || true
 [[ -n "${_ids:-}" ]] && TELEGRAM_CHAT_IDS="${_ids// /}"
 
 BTN_LABELS=(); BTN_URLS=()
 
-read -rp "➕ Add URL button(s)? [y/N]: " _addbtn || true
+read -rp "   ${C_ORANGE}➕ Add Buttons? [y/N]:${RESET} " _addbtn || true
 if [[ "${_addbtn:-}" =~ ^([yY]|yes)$ ]]; then
   i=0
   while true; do
-    echo "—— Button $((i+1)) ——"
-    read -rp "🔖 Label: " _lbl || true
+    echo "   ${C_GREY}—— Button $((i+1)) ——${RESET}"
+    read -rp "   🏷️ Label: " _lbl || true
     if [[ -z "${_lbl:-}" ]]; then
-      warn "Skipped (label is empty)."
+      warn "Skipped."
     else
-      read -rp "🔗 URL (http/https): " _url || true
+      read -rp "   🔗 URL:   " _url || true
       if [[ -n "${_url:-}" && "${_url}" =~ ^https?:// ]]; then
         BTN_LABELS+=("${_lbl}")
         BTN_URLS+=("${_url}")
-        ok "Added: ${_lbl} → ${_url}"
+        ok "Added: ${_lbl}"
       else
-        warn "Skipped (invalid or empty URL)."
+        warn "Invalid URL."
       fi
     fi
     i=$(( i + 1 ))
     (( i >= 3 )) && break
-    read -rp "➕ Add another button? [y/N]: " _more || true
+    read -rp "   ➕ Add another? [y/N]: " _more || true
     [[ "${_more:-}" =~ ^([yY]|yes)$ ]] || break
   done
 fi
@@ -145,73 +155,72 @@ tg_send(){
       --data-urlencode "text=${text}" \
       -d "parse_mode=HTML" \
       ${RM:+--data-urlencode "reply_markup=${RM}"} >>"$LOG_FILE" 2>&1
-    ok "Telegram sent → ${_cid}"
+    ok "Sent to ID: ${_cid}"
   done
 }
 
 # =================== Step 2: Project ===================
-banner "🧭 Step 2 — GCP Project"
+banner "🏗️ Step 2 — GCP Project"
 PROJECT="$(gcloud config get-value project 2>/dev/null || true)"
 if [[ -z "$PROJECT" ]]; then
-  err "No active project. Run: gcloud config set project <YOUR_PROJECT_ID>"
+  err "No active project. Run: gcloud config set project ID"
   exit 1
 fi
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
-ok "Project Loaded: ${PROJECT}"
+kv "Project ID" "${PROJECT}"
 
 # =================== Step 3: Protocol ===================
-banner "🧩 Step 3 — Select Protocol"
-echo "  1️⃣ Trojan WS"
-echo "  2️⃣ VLESS WS"
-echo "  3️⃣ VLESS gRPC"
-read -rp "Choose [1-3, default 1]: " _opt || true
+banner "🔌 Step 3 — Select Protocol"
+echo "   ${C_CYAN}1.${RESET} Trojan WS"
+echo "   ${C_CYAN}2.${RESET} VLESS WS"
+echo "   ${C_CYAN}3.${RESET} VLESS gRPC"
+read -rp "   ${C_YELLOW}Select [1-3]:${RESET} " _opt || true
 case "${_opt:-1}" in
   2) PROTO="vless-ws"   ; IMAGE="docker.io/n4pro/vl:latest"        ;;
   3) PROTO="vless-grpc" ; IMAGE="docker.io/n4pro/vlessgrpc:latest" ;;
   *) PROTO="trojan-ws"  ; IMAGE="docker.io/n4pro/tr:latest"        ;;
 esac
-ok "Protocol selected: ${PROTO^^}"
-echo "[Docker Hidden] ${IMAGE}" >>"$LOG_FILE"
+ok "Selected: ${PROTO^^}"
 
 # =================== Step 4: Region (Fixed) ===================
-banner "🌍 Step 4 — Region"
 REGION="us-central1"
-ok "Region: ${REGION} (Fixed)"
 
 # =================== Step 5: Resources (Fixed) ===================
-banner "🧮 Step 5 — Resources"
 CPU="2"
 MEMORY="2Gi"
-ok "CPU/Mem: ${CPU} vCPU / ${MEMORY} (Fixed)"
 
-# =================== Step 6: Service Name ===================
-banner "🪪 Step 6 — Service Name"
-SERVICE="${SERVICE:-ksgcp-vpn}" # Changed default name
+# =================== Step 6: Service Name (FIXED) ===================
+# Per request: Fixed to 'ksgcp' only.
+SERVICE="ksgcp"
 TIMEOUT="${TIMEOUT:-3600}"
 PORT="${PORT:-8080}"
-read -rp "Service name [default: ${SERVICE}]: " _svc || true
-SERVICE="${_svc:-$SERVICE}"
-ok "Service: ${SERVICE}"
+
+banner "⚙️ Step 4 — Configuration"
+kv "Region" "${REGION}"
+kv "Service" "${SERVICE} (Fixed)"
+kv "Specs" "${CPU} CPU / ${MEMORY} RAM"
 
 # =================== Timezone Setup ===================
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
-END_EPOCH="$(( START_EPOCH + 5*3600 ))"
 fmt_dt(){ date -d @"$1" "+%d.%m.%Y %I:%M %p"; }
-START_LOCAL="$(fmt_dt "$START_EPOCH")"
-END_LOCAL="$(fmt_dt "$END_EPOCH")"
-banner "🕒 Step 7 — Deployment Time"
-kv "Start:" "${START_LOCAL}"
-kv "End:"   "${END_LOCAL}"
+fmt_time(){ date -d @"$1" "+%I:%M %p"; }
+
+START_FULL="$(fmt_dt "$START_EPOCH")"
+JUST_TIME="$(fmt_time "$START_EPOCH")"
+
+banner "🕒 Step 5 — Time Check"
+kv "Time" "${JUST_TIME}"
+kv "Start Time" "${START_FULL}"
 
 # =================== Enable APIs ===================
-banner "⚙️ Step 8 — Enable APIs"
-run_with_progress "Enabling CloudRun & Build APIs" \
+banner "🔧 Step 6 — Setup APIs"
+run_with_progress "Enabling CloudRun API" \
   gcloud services enable run.googleapis.com cloudbuild.googleapis.com --quiet
 
 # =================== Deploy ===================
-banner "🚀 Step 9 — Deploying to Cloud Run"
-run_with_progress "Deploying ${SERVICE}" \
+banner "🚀 Step 7 — Deploying"
+run_with_progress "Pushing ${SERVICE} to Cloud Run" \
   gcloud run deploy "$SERVICE" \
     --image="$IMAGE" \
     --platform=managed \
@@ -228,9 +237,10 @@ run_with_progress "Deploying ${SERVICE}" \
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
 CANONICAL_HOST="${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
 URL_CANONICAL="https://${CANONICAL_HOST}"
-banner "✅ Result"
-ok "Service Ready"
-kv "URL:" "${C_LBLUE}${BOLD}${URL_CANONICAL}${RESET}"
+
+banner "🎉 FINAL RESULT"
+kv "Status" "Active"
+kv "Domain" "${URL_CANONICAL}"
 
 # =================== Protocol URLs ===================
 TROJAN_PASS="Trojan-2025"
@@ -244,19 +254,20 @@ case "$PROTO" in
 esac
 
 # =================== Telegram Notify ===================
-banner "📣 Step 10 — Telegram Notify"
+banner "📨 Step 8 — Sending Notification"
 
 MSG=$(cat <<EOF
-<blockquote>🚀 KSGCP V2RAY KEY</blockquote>
-<blockquote>⏰ 5-Hour Free Service</blockquote>
-<blockquote>📡Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်</blockquote>
+<blockquote>🚀 KSGCP V2RAY SERVICE</blockquote>
+<blockquote>💎 Premium Server Active</blockquote>
+<blockquote>📡 Mytel 4G Supported</blockquote>
 <pre><code>${URI}</code></pre>
 
-<blockquote>⏳ End: <code>${END_LOCAL}</code></blockquote>
+<blockquote>⏰ Time: <code>${JUST_TIME}</code></blockquote>
+<blockquote>📅 Start Time: <code>${START_FULL}</code></blockquote>
 EOF
 )
 
 tg_send "${MSG}"
 
-printf "\n${C_GREEN}${BOLD}✨ Done — KSGCP Deployed (min=1) ${RESET}\n"
-printf "${C_GREY}📄 Log file: ${LOG_FILE}${RESET}\n"
+printf "\n${C_LIME}${BOLD}✅ ALL DONE! Enjoy your KSGCP Server.${RESET}\n"
+printf "${C_GREY}📄 Log: ${LOG_FILE}${RESET}\n"
