@@ -203,15 +203,14 @@ kv "Specs" "${CPU} CPU / ${MEMORY} RAM"
 # =================== Timezone Setup ===================
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
+END_EPOCH="$(( START_EPOCH + 5*3600 ))" # 5 hours later
 fmt_dt(){ date -d @"$1" "+%d.%m.%Y %I:%M %p"; }
-fmt_time(){ date -d @"$1" "+%I:%M %p"; }
+START_LOCAL="$(fmt_dt "$START_EPOCH")"
+END_LOCAL="$(fmt_dt "$END_EPOCH")"
 
-START_FULL="$(fmt_dt "$START_EPOCH")"
-JUST_TIME="$(fmt_time "$START_EPOCH")"
-
-banner "🕒 Step 5 — Time Check"
-kv "Time" "${JUST_TIME}"
-kv "Start Time" "${START_FULL}"
+banner "🕒 Step 5 — Deployment Time"
+kv "Start:" "${START_LOCAL}"
+kv "End:"   "${END_LOCAL}"
 
 # =================== Enable APIs ===================
 banner "🔧 Step 6 — Setup APIs"
@@ -262,8 +261,8 @@ MSG=$(cat <<EOF
 <blockquote>📡 Mytel 4G Supported</blockquote>
 <pre><code>${URI}</code></pre>
 
-<blockquote>⏰ Time: <code>${JUST_TIME}</code></blockquote>
-<blockquote>📅 Start Time: <code>${START_FULL}</code></blockquote>
+<blockquote>✅ စတင်ချိန်: <code>${START_LOCAL}</code></blockquote>
+<blockquote>❌ ပြီးဆုံးမယ့် အချိန် (ခန့်မှန်း): <code>${END_LOCAL}</code></blockquote>
 EOF
 )
 
