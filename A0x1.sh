@@ -1,139 +1,225 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ===== Ensure interactive reads =====
+# ===== Ensure interactive reads even when run via curl/process substitution =====
 if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
   exec </dev/tty
 fi
 
-# ===== Logging =====
-LOG_FILE="/tmp/alpha0x1_deploy.log"
+# ===== Logging & error handler =====
+LOG_FILE="/tmp/ksgcp_cloudrun_$(date +%s).log"
 touch "$LOG_FILE"
 
-# =================== Color UI ===================
-RESET=$'\e[0m'; BOLD=$'\e[1m'
-C_CYAN=$'\e[38;5;51m'; C_LIME=$'\e[38;5;118m'
-C_PINK=$'\e[38;5;201m'; C_GREY=$'\e[38;5;240m'
+on_err() {
+  local rc=$?
+  echo "" | tee -a "$LOG_FILE"
+  echo "❌ ERROR: Command failed (exit $rc) at line $LINENO: ${BASH_COMMAND}" | tee -a "$LOG_FILE" >&2
+  echo "—— LOG (last 80 lines) ——" >&2
+  tail -n 80 "$LOG_FILE" >&2 || true
+  echo "📄 Log File: $LOG_FILE" >&2
+  exit $rc
+}
+trap on_err ERR
 
-banner(){ printf "\n${C_PINK}${BOLD}✨ %s${RESET}\n${C_CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n" "$1"; }
-ok(){ printf "   ${C_LIME}✔${RESET} %s\n" "$1"; }
-kv(){ printf "   ${C_CYAN}➤ %-12s${RESET} %s\n" "$1" "$2"; }
+# =================== Color & UI (Neon/Rainbow Theme) ===================
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+  RESET=$'\e[0m'
+  BOLD=$'\e[1m'
+  # Neon Palette
+  C_PINK=$'\e[38;5;201m'
+  C_CYAN=$'\e[38;5;51m'
+  C_LIME=$'\e[38;5;118m'
+  C_ORANGE=$'\e[38;5;214m'
+  C_PURPLE=$'\e[38;5;135m'
+  C_YELLOW=$'\e[38;5;226m'
+  C_WHITE=$'\e[38;5;255m'
+  C_RED=$'\e[38;5;196m'
+  C_GREY=$'\e[38;5;240m'
+else
+  RESET= BOLD= C_PINK= C_CYAN= C_LIME= C_ORANGE= C_PURPLE= C_YELLOW= C_WHITE= C_RED= C_GREY=
+fi
+
+hr(){ printf "${C_GREY}%s${RESET}\n" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; }
+banner(){ local title="$1"; printf "\n${C_PINK}${BOLD}✨ %s${RESET}\n${C_CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n" "$title"; }
+ok(){ printf " ${C_LIME}✔${RESET} %s\n" "$1"; }
+warn(){ printf " ${C_ORANGE}⚠${RESET} %s\n" "$1"; }
+err(){ printf " ${C_RED}✘${RESET} %s\n" "$1"; }
+kv(){ printf " ${C_CYAN}➤ %-12s${RESET} ${C_WHITE}%s${RESET}\n" "$1" "$2"; }
 
 clear
-printf "\n${C_CYAN}${BOLD}🚀 ALPHA 0x1 DEPLOYER${RESET}\n"
+printf "\n${C_PURPLE}${BOLD}🚀 KSGCP CLOUD RUN DEPLOYER${RESET} ${C_ORANGE}(Dual Protocol Edition)${RESET}\n"
+hr
 
-# =================== CONFIGURATION ===================
-TROJAN_PASS="Alpha-Troj-888"
-VLESS_UUID="74272911-3470-495c-8573-240395115189"
-SERVICE_NAME_GRPC="Alpha0x1"
-IMAGE="docker.io/a0x1/3-in-1:v1"
+# =================== Simple spinner ===================
+run_with_progress() {
+  local label="$1"; shift
+  ( "$@" ) >>"$LOG_FILE" 2>&1 &
+  local pid=$!
+  local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+  local i=0
+  if [[ -t 1 ]]; then
+    printf "\e[?25l" # Hide cursor
+    while kill -0 "$pid" 2>/dev/null; do
+      i=$(( (i+1) %10 ))
+      printf "\r ${C_YELLOW}${spin:$i:1}${RESET} %s..." "$label"
+      sleep 0.1
+    done
+    wait "$pid"; local rc=$?
+    printf "\r\e[K" # Clear line
+    if (( rc==0 )); then
+      printf " ${C_LIME}✅${RESET} %s\n" "$label"
+    else
+      printf " ${C_RED}❌${RESET} %s failed (see %s)\n" "$label" "$LOG_FILE"
+      return $rc
+    fi
+    printf "\e[?25h" # Show cursor
+  else
+    wait "$pid"
+  fi
+}
 
-# =================== Time Setup ===================
-export TZ="Asia/Yangon"
-START_EPOCH="$(date +%s)"
-fmt_dt(){ date -d @"$1" "+%d.%m.%Y %I:%M %p"; }
-fmt_time(){ date -d @"$1" "+%I:%M %p"; }
-START_FULL="$(fmt_dt "$START_EPOCH")"
-JUST_TIME="$(fmt_time "$START_EPOCH")"
-
-# =================== Telegram Setup ===================
-banner "🤖 Telegram Setup"
+# =================== Step 1: Telegram Config ===================
+banner "🤖 Step 1 — Telegram Setup"
 TELEGRAM_TOKEN="${TELEGRAM_TOKEN:-}"
-TELEGRAM_CHAT_IDS="${TELEGRAM_CHAT_IDS:-}"
+TELEGRAM_CHAT_IDS="${TELEGRAM_CHAT_IDS:-${TELEGRAM_CHAT_ID:-}}"
 
-if [[ -z "$TELEGRAM_TOKEN" ]]; then
-  read -rp "   💎 Bot Token: " INPUT_TOKEN
-  TELEGRAM_TOKEN="${INPUT_TOKEN:-}"
+if [[ ( -z "${TELEGRAM_TOKEN}" || -z "${TELEGRAM_CHAT_IDS}" ) && -f .env ]]; then
+  set -a; source ./.env; set +a
 fi
-if [[ -z "$TELEGRAM_CHAT_IDS" ]]; then
-  read -rp "   💎 Chat ID:   " INPUT_ID
-  TELEGRAM_CHAT_IDS="${INPUT_ID:-}"
+
+read -rp " ${C_PURPLE}💎 Bot Token:${RESET} " _tk || true
+[[ -n "${_tk:-}" ]] && TELEGRAM_TOKEN="$_tk"
+
+if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then
+  warn "Token empty! No notifications will be sent."
+else
+  ok "Token saved."
 fi
+
+read -rp " ${C_PURPLE}💎 Chat ID:${RESET} " _ids || true
+[[ -n "${_ids:-}" ]] && TELEGRAM_CHAT_IDS="${_ids// /}"
+
+# Button section REMOVED as per request
+
+CHAT_ID_ARR=()
+IFS=',' read -r -a CHAT_ID_ARR <<< "${TELEGRAM_CHAT_IDS:-}" || true
 
 tg_send(){
-  [[ -z "$TELEGRAM_TOKEN" || -z "$TELEGRAM_CHAT_IDS" ]] && return
-  local msg_text="$1"
-  for cid in ${TELEGRAM_CHAT_IDS//,/ }; do
-    curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-      -d "chat_id=$cid" \
-      --data-urlencode "text=$msg_text" \
-      -d "parse_mode=HTML" >/dev/null 2>&1 || true
+  local text="$1"
+  if [[ -z "${TELEGRAM_TOKEN:-}" || ${#CHAT_ID_ARR[@]} -eq 0 ]]; then return 0; fi
+  
+  for _cid in "${CHAT_ID_ARR[@]}"; do
+    curl -s -S -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+      -d "chat_id=${_cid}" \
+      --data-urlencode "text=${text}" \
+      -d "parse_mode=HTML" >>"$LOG_FILE" 2>&1
+    ok "Sent to ID: ${_cid}"
   done
 }
 
-# =================== Project Setup ===================
-banner "🏗️ GCP Project"
-PROJECT="$(gcloud config get-value project 2>/dev/null)"
+# =================== Step 2: Project ===================
+banner "🏗️ Step 2 — GCP Project"
+PROJECT="$(gcloud config get-value project 2>/dev/null || true)"
 if [[ -z "$PROJECT" ]]; then
-  echo "❌ No Project found. Run: gcloud config set project <ID>"
+  err "No active project. Run: gcloud config set project ID"
   exit 1
 fi
-kv "Project" "$PROJECT"
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
+kv "Project ID" "${PROJECT}"
 
-# =================== Protocol Selection ===================
-banner "🔌 Select Protocol Link"
-echo "   1. Trojan WS"
-echo "   2. VLESS WS"
-echo "   3. VLESS gRPC (ServiceName: Alpha0x1)"
-read -rp "   Select [1-3]: " OPTION
+# =================== Step 3: Configuration ===================
+# Fixed settings for Dual Output
+IMAGE="docker.io/n4pro/vlessgrpc:latest"
+REGION="us-central1"
+CPU="2"
+MEMORY="4Gi"
+SERVICE="alpha0x1"   # GCP Service names must be lowercase
+TIMEOUT="${TIMEOUT:-3600}"
+PORT="${PORT:-8080}"
+
+banner "⚙️ Step 3 — Configuration"
+kv "Region" "${REGION}"
+kv "Service" "${SERVICE}"
+kv "Protocol" "Dual (VLESS gRPC + Trojan)"
+kv "Specs" "${CPU} CPU / ${MEMORY} RAM"
+
+# =================== Timezone Setup ===================
+export TZ="Asia/Yangon"
+START_EPOCH="$(date +%s)"
+fmt_dt(){ date -d @"$1" "+%I:%M %p"; }
+START_LOCAL="$(fmt_dt "$START_EPOCH")"
+
+banner "🕒 Step 4 — Deployment Time"
+kv "Start Time" "${START_LOCAL}"
+kv "Duration" "Unlimited"
+
+# =================== Enable APIs ===================
+banner "🔧 Step 5 — Setup APIs"
+run_with_progress "Enabling CloudRun API" \
+  gcloud services enable run.googleapis.com cloudbuild.googleapis.com --quiet
 
 # =================== Deploy ===================
-banner "🚀 Deploying Alpha0x1..."
-SERVICE="alpha0x1"
-REGION="us-central1"
-
-gcloud services enable run.googleapis.com --quiet >/dev/null 2>&1
-
-# Note: Added --use-http2 for gRPC support
-gcloud run deploy "$SERVICE" \
+banner "🚀 Step 6 — Deploying"
+# Using --use-http2 is CRITICAL for gRPC to work
+run_with_progress "Pushing ${SERVICE} to Cloud Run (HTTP/2 enabled)" \
+  gcloud run deploy "$SERVICE" \
   --image="$IMAGE" \
   --platform=managed \
   --region="$REGION" \
-  --memory="2Gi" \
-  --cpu="2" \
+  --memory="$MEMORY" \
+  --cpu="$CPU" \
+  --timeout="$TIMEOUT" \
   --allow-unauthenticated \
-  --use-http2 \
-  --port=8080 \
+  --port="$PORT" \
   --min-instances=1 \
-  --quiet >"$LOG_FILE" 2>&1
+  --use-http2 \
+  --quiet
 
-# =================== Generate Link ===================
-URL=$(gcloud run services describe "$SERVICE" --platform=managed --region="$REGION" --format='value(status.url)')
-HOST="${URL#https://}"
+# =================== Result ===================
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
+CANONICAL_HOST="${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
+URL_CANONICAL="https://${CANONICAL_HOST}"
 
-case "${OPTION:-1}" in
-  2) 
-    PROTO_NAME="VLESS WS"
-    URI="vless://${VLESS_UUID}@vpn.googleapis.com:443?path=%2Fvless&security=tls&encryption=none&host=${HOST}&type=ws#Alpha_VLESS"
-    ;;
-  3) 
-    PROTO_NAME="VLESS gRPC"
-    URI="vless://${VLESS_UUID}@vpn.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${SERVICE_NAME_GRPC}&sni=${HOST}#Alpha_gRPC"
-    ;;
-  *) 
-    PROTO_NAME="Trojan WS"
-    URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2Ftrojan&security=tls&host=${HOST}&type=ws#Alpha_Trojan"
-    ;;
-esac
+banner "🎉 FINAL RESULT"
+kv "Status" "Active"
+kv "Domain" "${URL_CANONICAL}"
 
-# =================== Output ===================
-banner "🎉 SUCCESS"
-kv "Protocol" "$PROTO_NAME"
-kv "Domain" "$HOST"
+# =================== Protocol URLs (DUAL) ===================
+TROJAN_PASS="Trojan-2025"
+VLESS_UUID_GRPC="0c890000-4733-4a0e-9a7f-fc341bd20000"
+
+# 1. VLESS gRPC URI
+URI_VLESS="vless://${VLESS_UUID_GRPC}@vpn.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=n4-grpc&sni=${CANONICAL_HOST}#Alpha0x1-VLESS"
+
+# 2. Trojan WS URI
+URI_TROJAN="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host=${CANONICAL_HOST}&type=ws#Alpha0x1-TROJAN"
+
 echo ""
-echo -e "${C_LIME}${URI}${RESET}"
+echo " ${C_LIME}🔹 KEY 1: VLESS gRPC${RESET}"
+echo " ${C_WHITE}${URI_VLESS}${RESET}"
+echo ""
+echo " ${C_LIME}🔹 KEY 2: Trojan WS${RESET}"
+echo " ${C_WHITE}${URI_TROJAN}${RESET}"
 
-# =================== Notify ===================
+# =================== Telegram Notify ===================
+banner "📨 Step 7 — Sending Notification"
+
 MSG=$(cat <<EOF
-<blockquote>🚀 ALPHA 0x1 SERVICE</blockquote>
+<blockquote>🚀 ALPHA0x1 DUAL SERVICE</blockquote>
 <blockquote>💎 Premium Server Active</blockquote>
 <blockquote>📡 Mytel 4G Supported</blockquote>
-<pre><code>${URI}</code></pre>
 
-<blockquote>⏰ Time: <code>${JUST_TIME}</code></blockquote>
-<blockquote>📅 Start Time: <code>${START_FULL}</code></blockquote>
+<b>1️⃣ VLESS gRPC:</b>
+<pre><code>${URI_VLESS}</code></pre>
+
+<b>2️⃣ Trojan WS:</b>
+<pre><code>${URI_TROJAN}</code></pre>
+
+<blockquote>✅ စတင်ချိန်: <code>${START_LOCAL}</code></blockquote>
 EOF
 )
 
-tg_send "$MSG"
-printf "\n${C_GREY}📄 Log saved to ${LOG_FILE}${RESET}\n"
+tg_send "${MSG}"
+
+printf "\n${C_LIME}${BOLD}✅ ALL DONE! Enjoy your Alpha0x1 Server.${RESET}\n"
+printf "${C_GREY}📄 Log: ${LOG_FILE}${RESET}\n"
