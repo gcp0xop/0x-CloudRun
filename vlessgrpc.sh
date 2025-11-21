@@ -7,7 +7,7 @@ if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
 fi
 
 # ===== Logging & error handler =====
-LOG_FILE="/tmp/ksgcp_cloudrun_$(date +%s).log"
+LOG_FILE="/tmp/ksgcp_cloudrun_vless_$(date +%s).log"
 touch "$LOG_FILE"
 
 on_err() {
@@ -21,11 +21,10 @@ on_err() {
 }
 trap on_err ERR
 
-# =================== Color & UI (Neon/Rainbow Theme) ===================
+# =================== Color & UI ===================
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   RESET=$'\e[0m'
   BOLD=$'\e[1m'
-  # Neon Palette
   C_PINK=$'\e[38;5;201m'
   C_CYAN=$'\e[38;5;51m'
   C_LIME=$'\e[38;5;118m'
@@ -87,8 +86,11 @@ if [[ ( -z "${TELEGRAM_TOKEN}" || -z "${TELEGRAM_CHAT_IDS}" ) && -f .env ]]; the
   set -a; source ./.env; set +a
 fi
 
-read -rp " ${C_PURPLE}💎 Bot Token:${RESET} " _tk || true
-[[ -n "${_tk:-}" ]] && TELEGRAM_TOKEN="$_tk"
+# Prompt if missing
+if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then
+    read -rp " ${C_PURPLE}💎 Bot Token:${RESET} " _tk || true
+    [[ -n "${_tk:-}" ]] && TELEGRAM_TOKEN="$_tk"
+fi
 
 if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then
   warn "Token empty! No notifications will be sent."
@@ -96,8 +98,10 @@ else
   ok "Token saved."
 fi
 
-read -rp " ${C_PURPLE}💎 Chat ID:${RESET} " _ids || true
-[[ -n "${_ids:-}" ]] && TELEGRAM_CHAT_IDS="${_ids// /}"
+if [[ -z "${TELEGRAM_CHAT_IDS:-}" ]]; then
+    read -rp " ${C_PURPLE}💎 Chat ID:${RESET} " _ids || true
+    [[ -n "${_ids:-}" ]] && TELEGRAM_CHAT_IDS="${_ids// /}"
+fi
 
 CHAT_ID_ARR=()
 IFS=',' read -r -a CHAT_ID_ARR <<< "${TELEGRAM_CHAT_IDS:-}" || true
@@ -107,10 +111,11 @@ tg_send(){
   if [[ -z "${TELEGRAM_TOKEN:-}" || ${#CHAT_ID_ARR[@]} -eq 0 ]]; then return 0; fi
   
   for _cid in "${CHAT_ID_ARR[@]}"; do
+    # Using curl with explicit error checking and url encoding for text
     curl -s -S -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
       -d "chat_id=${_cid}" \
       --data-urlencode "text=${text}" \
-      -d "parse_mode=HTML" >>"$LOG_FILE" 2>&1
+      -d "parse_mode=HTML" >>"$LOG_FILE" 2>&1 || warn "Failed to send TG message to ${_cid}"
     ok "Sent to ID: ${_cid}"
   done
 }
@@ -122,7 +127,6 @@ if [[ -z "$PROJECT" ]]; then
   err "No active project. Run: gcloud config set project ID"
   exit 1
 fi
-PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
 kv "Project ID" "${PROJECT}"
 
 # =================== Step 3: Configuration ===================
@@ -140,11 +144,10 @@ kv "Service" "${SERVICE}"
 kv "Protocol" "VLESS gRPC Only"
 kv "Specs" "${CPU} CPU / ${MEMORY} RAM"
 
-# =================== Timezone Setup (5 Hours Calculation) ===================
+# =================== Timezone Setup ===================
 export TZ="Asia/Yangon"
 START_EPOCH="$(date +%s)"
-END_EPOCH="$(( START_EPOCH + 18000 ))" # 18000 seconds = 5 hours
-
+END_EPOCH="$(( START_EPOCH + 18000 ))" # 5 Hours
 fmt_dt(){ date -d @"$1" "+%I:%M %p"; }
 END_LOCAL="$(fmt_dt "$END_EPOCH")"
 
@@ -174,18 +177,19 @@ run_with_progress "Pushing ${SERVICE} to Cloud Run (HTTP/2 enabled)" \
   --quiet
 
 # =================== Result ===================
-PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
-CANONICAL_HOST="${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
-URL_CANONICAL="https://${CANONICAL_HOST}"
+# FIX: Get exact URL from Cloud Run instead of constructing it manually
+RAW_URL=$(gcloud run services describe "$SERVICE" --platform managed --region "$REGION" --format 'value(status.url)')
+CANONICAL_HOST="${RAW_URL#https://}" # Remove https:// prefix
 
 banner "🎉 FINAL RESULT"
 kv "Status" "Active"
-kv "Domain" "${URL_CANONICAL}"
+kv "Domain" "${CANONICAL_HOST}"
 
 # =================== Protocol URLs ===================
 VLESS_UUID_GRPC="0c890000-4733-4a0e-9a7f-fc341bd20000"
 
 # VLESS gRPC URI
+# Note: mode=gun is often standard for gRPC, ensure client supports it.
 URI_VLESS="vless://${VLESS_UUID_GRPC}@vpn.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=n4-grpc&sni=${CANONICAL_HOST}#Alpha0x1-VLESS"
 
 echo ""
@@ -196,13 +200,16 @@ echo ""
 # =================== Telegram Notify ===================
 banner "📨 Step 7 — Sending Notification"
 
+# FIX: Replace '&' with '&amp;' specifically for Telegram HTML parsing
+TG_URI_VLESS="${URI_VLESS//&/&amp;}"
+
 MSG=$(cat <<EOF
 <blockquote>🚀 ALPHA0x1 VLESS SERVICE</blockquote>
 <blockquote>💎 Premium Server Active</blockquote>
 <blockquote>📡 Mytel 4G Supported</blockquote>
 
 <b>1️⃣ VLESS gRPC:</b>
-<pre><code>${URI_VLESS}</code></pre>
+<pre><code>${TG_URI_VLESS}</code></pre>
 
 <blockquote>❌ ပြီးဆုံးချိန်: <code>${END_LOCAL}</code></blockquote>
 EOF
