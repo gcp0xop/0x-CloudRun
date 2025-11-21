@@ -7,7 +7,7 @@ if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
 fi
 
 # ===== Logging & error handler =====
-LOG_FILE="/tmp/ksgcp_cloudrun_$(date +%s).log"
+LOG_FILE="/tmp/alpha0x1_3in1_script$(date +%s).log"
 touch "$LOG_FILE"
 on_err() {
   local rc=$?
@@ -187,7 +187,7 @@ REGION="us-central1"
 
 # =================== Step 5: Resources (Fixed) ===================
 CPU="4"
-MEMORY="2Gi"
+MEMORY="4Gi"
 
 # =================== Step 6: Service Name (FIXED) ===================
 # Per request: Fixed to 'ksgcp' only.
