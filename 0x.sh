@@ -186,8 +186,8 @@ ok "Selected: ${PROTO^^}"
 REGION="us-central1"
 
 # =================== Step 5: Resources (Fixed) ===================
-CPU="2"
-MEMORY="4Gi"
+CPU="4"
+MEMORY="2Gi"
 
 # =================== Step 6: Service Name (FIXED) ===================
 # Per request: Fixed to 'ksgcp' only.
