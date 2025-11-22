@@ -145,7 +145,7 @@ echo "   ${C_YELLOW}3.${RESET} VLESS gRPC"
 read -rp "   ${C_ORANGE}Select [1-3]:${RESET} " _opt || true
 case "${_opt:-1}" in
   2) PROTO="vless-ws"   ; IMAGE="docker.io/n4pro/vl:latest"        ;;
-  3) PROTO="vless-grpc" ; IMAGE="docker.io/a0x1/al0x1:latest" ;;
+  3) PROTO="vless-grpc" ; IMAGE="docker.io/n4pro/vl:latest" ;;
   *) PROTO="trojan-ws"  ; IMAGE="docker.io/n4pro/tr:latest"        ;;
 esac
 ok "Selected: ${PROTO^^}"
