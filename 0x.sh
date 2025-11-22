@@ -199,6 +199,7 @@ run_with_progress "Pushing ${SERVICE} to Cloud Run" \
     --min-instances=1 \
     --max-instances=2 \
     --concurrency=300 \
+    --use-http2 \
     --quiet
 
 # =================== Result ===================
