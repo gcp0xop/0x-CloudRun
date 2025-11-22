@@ -197,7 +197,7 @@ run_with_progress "Pushing ${SERVICE} to Cloud Run" \
     --allow-unauthenticated \
     --port="$PORT" \
     --min-instances=1 \
-    --max-instances=10 \
+    --max-instances=2 \
     --quiet
 
 # =================== Result ===================
