@@ -150,21 +150,21 @@ case "${_opt:-1}" in
 esac
 ok "Selected: ${PROTO^^}"
 
-# =================== Step 4: Region (Fixed) ===================
+# =================== Step 4: Region ===================
 REGION="us-central1"
 
-# =================== Step 5: Resources (Fixed) ===================
-CPU="2"
-MEMORY="2Gi"
+# =================== Step 5: Resources ===================
+CPU="4"
+MEMORY="4Gi"
 
-# =================== Step 6: Service Name (FIXED) ===================
-SERVICE="ksgcp"
+# =================== Step 6: Service Name ===================
+SERVICE="alpha0x1"
 TIMEOUT="${TIMEOUT:-3600}"
 PORT="${PORT:-8080}"
 
 banner "⚙️ Step 4 — Configuration"
 kv "Region" "${REGION}"
-kv "Service" "${SERVICE} (Fixed)"
+kv "Service" "${SERVICE}"
 kv "Specs" "${CPU} CPU / ${MEMORY} RAM"
 
 # =================== Timezone Setup ===================
@@ -197,7 +197,7 @@ run_with_progress "Pushing ${SERVICE} to Cloud Run" \
     --allow-unauthenticated \
     --port="$PORT" \
     --min-instances=1 \
-    --quiet
+    --max-instances=2 \
 
 # =================== Result ===================
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
