@@ -7,7 +7,7 @@ if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
 fi
 
 # ===== Logging & error handler =====
-LOG_FILE="/tmp/alpha0x1_3in1_script$(date +%s).log"
+LOG_FILE="/tmp/alpha0x1_deploy_$(date +%s).log"
 touch "$LOG_FILE"
 on_err() {
   local rc=$?
@@ -20,37 +20,39 @@ on_err() {
 }
 trap on_err ERR
 
-# =================== Color & UI (Neon/Rainbow Theme) ===================
+# =================== Color & UI (Gold/Luxury Theme) ===================
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   RESET=$'\e[0m'
   BOLD=$'\e[1m'
   
-  # Neon Palette
-  C_PINK=$'\e[38;5;201m'
-  C_CYAN=$'\e[38;5;51m'
-  C_LIME=$'\e[38;5;118m'
-  C_ORANGE=$'\e[38;5;214m'
-  C_PURPLE=$'\e[38;5;135m'
-  C_YELLOW=$'\e[38;5;226m'
-  C_WHITE=$'\e[38;5;255m'
-  C_RED=$'\e[38;5;196m'
-  C_GREY=$'\e[38;5;240m'
+  # Gold & Luxury Palette
+  C_GOLD=$'\e[38;5;220m'      # Pure Gold
+  C_YELLOW=$'\e[38;5;226m'    # Bright Yellow
+  C_ORANGE=$'\e[38;5;214m'    # Warm Gold/Orange
+  C_LIME=$'\e[38;5;118m'      # Green (Success)
+  C_RED=$'\e[38;5;196m'       # Red (Error)
+  C_GREY=$'\e[38;5;240m'      # Grey (Separators)
+  C_WHITE=$'\e[38;5;255m'     # White
+  
+  # Mapping old vars to Gold theme to ensure consistency
+  C_TITLE=$C_GOLD
+  C_ACCENT=$C_YELLOW
 else
-  RESET= BOLD= C_PINK= C_CYAN= C_LIME= C_ORANGE= C_PURPLE= C_YELLOW= C_WHITE= C_RED= C_GREY=
+  RESET= BOLD= C_GOLD= C_YELLOW= C_ORANGE= C_LIME= C_RED= C_GREY= C_WHITE= C_TITLE= C_ACCENT=
 fi
 
 hr(){ printf "${C_GREY}%s${RESET}\n" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; }
 banner(){
   local title="$1"
-  printf "\n${C_PINK}${BOLD}✨ %s${RESET}\n${C_CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n" "$title"
+  printf "\n${C_GOLD}${BOLD}✨ %s${RESET}\n${C_ORANGE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n" "$title"
 }
 ok(){   printf "   ${C_LIME}✔${RESET} %s\n" "$1"; }
 warn(){ printf "   ${C_ORANGE}⚠${RESET} %s\n" "$1"; }
 err(){  printf "   ${C_RED}✘${RESET} %s\n" "$1"; }
-kv(){   printf "   ${C_CYAN}➤ %-12s${RESET} ${C_WHITE}%s${RESET}\n" "$1" "$2"; }
+kv(){   printf "   ${C_YELLOW}➤ %-12s${RESET} ${C_WHITE}%s${RESET}\n" "$1" "$2"; }
 
 clear
-printf "\n${C_PURPLE}${BOLD}🚀 KSGCP CLOUD RUN DEPLOYER${RESET} ${C_ORANGE}(Premium Edition)${RESET}\n"
+printf "\n${C_GOLD}${BOLD}🚀 Alpha0x1 CLOUD RUN DEPLOYER${RESET} ${C_ORANGE}(Premium Edition)${RESET}\n"
 hr
 
 # =================== Simple spinner ===================
@@ -64,7 +66,7 @@ run_with_progress() {
     printf "\e[?25l" # Hide cursor
     while kill -0 "$pid" 2>/dev/null; do
       i=$(( (i+1) %10 ))
-      printf "\r   ${C_YELLOW}${spin:$i:1}${RESET} %s..." "$label"
+      printf "\r   ${C_GOLD}${spin:$i:1}${RESET} %s..." "$label"
       sleep 0.1
     done
     wait "$pid"; local rc=$?
@@ -90,7 +92,7 @@ if [[ ( -z "${TELEGRAM_TOKEN}" || -z "${TELEGRAM_CHAT_IDS}" ) && -f .env ]]; the
   set -a; source ./.env; set +a
 fi
 
-read -rp "   ${C_PURPLE}💎 Bot Token:${RESET} " _tk || true
+read -rp "   ${C_GOLD}💎 Bot Token:${RESET} " _tk || true
 [[ -n "${_tk:-}" ]] && TELEGRAM_TOKEN="$_tk"
 if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then
   warn "Token empty! No notifications will be sent."
@@ -98,63 +100,29 @@ else
   ok "Token saved."
 fi
 
-read -rp "   ${C_PURPLE}💎 Chat ID:${RESET}   " _ids || true
+read -rp "   ${C_GOLD}💎 Chat ID:${RESET}   " _ids || true
 [[ -n "${_ids:-}" ]] && TELEGRAM_CHAT_IDS="${_ids// /}"
 
+# --- BUTTONS REMOVED AS REQUESTED ---
 BTN_LABELS=(); BTN_URLS=()
-
-read -rp "   ${C_ORANGE}➕ Add Buttons? [y/N]:${RESET} " _addbtn || true
-if [[ "${_addbtn:-}" =~ ^([yY]|yes)$ ]]; then
-  i=0
-  while true; do
-    echo "   ${C_GREY}—— Button $((i+1)) ——${RESET}"
-    read -rp "   🏷️ Label: " _lbl || true
-    if [[ -z "${_lbl:-}" ]]; then
-      warn "Skipped."
-    else
-      read -rp "   🔗 URL:   " _url || true
-      if [[ -n "${_url:-}" && "${_url}" =~ ^https?:// ]]; then
-        BTN_LABELS+=("${_lbl}")
-        BTN_URLS+=("${_url}")
-        ok "Added: ${_lbl}"
-      else
-        warn "Invalid URL."
-      fi
-    fi
-    i=$(( i + 1 ))
-    (( i >= 3 )) && break
-    read -rp "   ➕ Add another? [y/N]: " _more || true
-    [[ "${_more:-}" =~ ^([yY]|yes)$ ]] || break
-  done
-fi
 
 CHAT_ID_ARR=()
 IFS=',' read -r -a CHAT_ID_ARR <<< "${TELEGRAM_CHAT_IDS:-}" || true
 
-json_escape(){ printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
-
 tg_send(){
-  local text="$1" RM=""
+  local text="$1"
   if [[ -z "${TELEGRAM_TOKEN:-}" || ${#CHAT_ID_ARR[@]} -eq 0 ]]; then return 0; fi
-  if (( ${#BTN_LABELS[@]} > 0 )); then
-    local L1 U1 L2 U2 L3 U3
-    [[ -n "${BTN_LABELS[0]:-}" ]] && L1="$(json_escape "${BTN_LABELS[0]}")" && U1="$(json_escape "${BTN_URLS[0]}")"
-    [[ -n "${BTN_LABELS[1]:-}" ]] && L2="$(json_escape "${BTN_LABELS[1]}")" && U2="$(json_escape "${BTN_URLS[1]}")"
-    [[ -n "${BTN_LABELS[2]:-}" ]] && L3="$(json_escape "${BTN_LABELS[2]}")" && U3="$(json_escape "${BTN_URLS[2]}")"
-    if (( ${#BTN_LABELS[@]} == 1 )); then
-      RM="{\"inline_keyboard\":[[{\"text\":\"${L1}\",\"url\":\"${U1}\"}]]}"
-    elif (( ${#BTN_LABELS[@]} == 2 )); then
-      RM="{\"inline_keyboard\":[[{\"text\":\"${L1}\",\"url\":\"${U1}\"}],[{\"text\":\"${L2}\",\"url\":\"${U2}\"}]]}"
-    else
-      RM="{\"inline_keyboard\":[[{\"text\":\"${L1}\",\"url\":\"${U1}\"}],[{\"text\":\"${L2}\",\"url\":\"${U2}\"},{\"text\":\"${L3}\",\"url\":\"${U3}\"}]]}"
-    fi
-  fi
+  
+  # Button logic kept but empty arrays mean no buttons sent
+  local RM=""
+  # (Button generation code removed since inputs are gone)
+
   for _cid in "${CHAT_ID_ARR[@]}"; do
     curl -s -S -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
       -d "chat_id=${_cid}" \
       --data-urlencode "text=${text}" \
       -d "parse_mode=HTML" \
-      ${RM:+--data-urlencode "reply_markup=${RM}"} >>"$LOG_FILE" 2>&1
+      >>"$LOG_FILE" 2>&1
     ok "Sent to ID: ${_cid}"
   done
 }
@@ -171,10 +139,10 @@ kv "Project ID" "${PROJECT}"
 
 # =================== Step 3: Protocol ===================
 banner "🔌 Step 3 — Select Protocol"
-echo "   ${C_CYAN}1.${RESET} Trojan WS"
-echo "   ${C_CYAN}2.${RESET} VLESS WS"
-echo "   ${C_CYAN}3.${RESET} VLESS gRPC"
-read -rp "   ${C_YELLOW}Select [1-3]:${RESET} " _opt || true
+echo "   ${C_YELLOW}1.${RESET} Trojan WS"
+echo "   ${C_YELLOW}2.${RESET} VLESS WS"
+echo "   ${C_YELLOW}3.${RESET} VLESS gRPC"
+read -rp "   ${C_ORANGE}Select [1-3]:${RESET} " _opt || true
 case "${_opt:-1}" in
   2) PROTO="vless-ws"   ; IMAGE="docker.io/n4pro/vl:latest"        ;;
   3) PROTO="vless-grpc" ; IMAGE="docker.io/n4pro/vlessgrpc:latest" ;;
@@ -190,7 +158,6 @@ CPU="2"
 MEMORY="2Gi"
 
 # =================== Step 6: Service Name (FIXED) ===================
-# Per request: Fixed to 'ksgcp' only.
 SERVICE="ksgcp"
 TIMEOUT="${TIMEOUT:-3600}"
 PORT="${PORT:-8080}"
@@ -247,26 +214,26 @@ VLESS_UUID="0c890000-4733-b20e-067f-fc341bd20000"
 VLESS_UUID_GRPC="0c890000-4733-4a0e-9a7f-fc341bd20000"
 
 case "$PROTO" in
-  trojan-ws)  URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host=${CANONICAL_HOST}&type=ws#KS_GCP" ;;
-  vless-ws)   URI="vless://${VLESS_UUID}@vpn.googleapis.com:443?path=%2FN4&security=tls&encryption=none&host=${CANONICAL_HOST}&type=ws#KS_GCP" ;;
-  vless-grpc) URI="vless://${VLESS_UUID_GRPC}@vpn.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=n4-grpc&sni=${CANONICAL_HOST}#KS_GCP" ;;
+  trojan-ws)  URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host=${CANONICAL_HOST}&type=ws#Alpha0x1" ;;
+  vless-ws)   URI="vless://${VLESS_UUID}@vpn.googleapis.com:443?path=%2FN4&security=tls&encryption=none&host=${CANONICAL_HOST}&type=ws#Alpha0x1" ;;
+  vless-grpc) URI="vless://${VLESS_UUID_GRPC}@vpn.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=n4-grpc&sni=${CANONICAL_HOST}#Alpha0x1" ;;
 esac
 
 # =================== Telegram Notify ===================
 banner "📨 Step 8 — Sending Notification"
 
 MSG=$(cat <<EOF
-<blockquote>🚀 KSGCP V2RAY SERVICE</blockquote>
-<blockquote>💎 Premium Server Active</blockquote>
-<blockquote>📡 Mytel 4G Supported</blockquote>
+<blockquote>🚀 Alpha0x1 V2RAY SERVICE</blockquote>
+<blockquote>⏰ 5-Hour Free Service</blockquote>
+<blockquote>📡Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်</blockquote>
 <pre><code>${URI}</code></pre>
 
 <blockquote>✅ စတင်ချိန်: <code>${START_LOCAL}</code></blockquote>
-<blockquote>❌ ပြီးဆုံးမယ့် အချိန် (ခန့်မှန်း): <code>${END_LOCAL}</code></blockquote>
+<blockquote>❌ ပြီးဆုံးမယ့် အချိန်: <code>${END_LOCAL}</code></blockquote>
 EOF
 )
 
 tg_send "${MSG}"
 
-printf "\n${C_LIME}${BOLD}✅ ALL DONE! Enjoy your KSGCP Server.${RESET}\n"
+printf "\n${C_LIME}${BOLD}✅ ALL DONE! Enjoy your Alpha0x1 Server.${RESET}\n"
 printf "${C_GREY}📄 Log: ${LOG_FILE}${RESET}\n"
