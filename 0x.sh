@@ -229,7 +229,7 @@ MSG=$(cat <<EOF
 <pre><code>${URI}</code></pre>
 
 <blockquote>✅ စတင်ချိန်: <code>${START_LOCAL}</code></blockquote>
-<blockquote>❌ ပြီးဆုံးမယ့် အချိန်: <code>${END_LOCAL}</code></blockquote>
+<blockquote>⏳ပြီးဆုံးချိန်: <code>${END_LOCAL}</code></blockquote>
 EOF
 )
 
