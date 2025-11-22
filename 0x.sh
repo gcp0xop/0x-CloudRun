@@ -145,7 +145,7 @@ echo "   ${C_YELLOW}3.${RESET} VLESS gRPC"
 read -rp "   ${C_ORANGE}Select [1-3]:${RESET} " _opt || true
 case "${_opt:-1}" in
   2) PROTO="vless-ws"   ; IMAGE="docker.io/n4pro/vl:latest"        ;;
-  3) PROTO="vless-grpc" ; IMAGE="docker.io/n4pro/vlessgrpc:latest" ;;
+  3) PROTO="vless-grpc" ; IMAGE="docker.io/a0x1/al0x1:latest" ;;
   *) PROTO="trojan-ws"  ; IMAGE="docker.io/n4pro/tr:latest"        ;;
 esac
 ok "Selected: ${PROTO^^}"
@@ -154,17 +154,17 @@ ok "Selected: ${PROTO^^}"
 REGION="us-central1"
 
 # =================== Step 5: Resources (Fixed) ===================
-CPU="2"
-MEMORY="2Gi"
+CPU="4"
+MEMORY="4Gi"
 
 # =================== Step 6: Service Name (FIXED) ===================
-SERVICE="ksgcp"
+SERVICE="alpha0x1"
 TIMEOUT="${TIMEOUT:-3600}"
 PORT="${PORT:-8080}"
 
 banner "⚙️ Step 4 — Configuration"
 kv "Region" "${REGION}"
-kv "Service" "${SERVICE} (Fixed)"
+kv "Service" "${SERVICE} "
 kv "Specs" "${CPU} CPU / ${MEMORY} RAM"
 
 # =================== Timezone Setup ===================
@@ -197,6 +197,7 @@ run_with_progress "Pushing ${SERVICE} to Cloud Run" \
     --allow-unauthenticated \
     --port="$PORT" \
     --min-instances=1 \
+    --max-instances=10 \
     --quiet
 
 # =================== Result ===================
