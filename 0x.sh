@@ -198,6 +198,7 @@ run_with_progress "Pushing ${SERVICE} to Cloud Run" \
     --port="$PORT" \
     --min-instances=1 \
     --max-instances=2 \
+    --concurrency=300 \
     --quiet
 
 # =================== Result ===================
