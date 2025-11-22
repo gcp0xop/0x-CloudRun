@@ -145,8 +145,8 @@ ok "Saved to alpha_config.txt"
 # Send Telegram
 MSG=$(cat <<EOF
 <blockquote>🚀 Alpha0x1 gRPC Server</blockquote>
-<blockquote>💎 Custom Docker: a0x1</blockquote>
-<blockquote>🌍 Region: ${REGION}</blockquote>
+<blockquote>⏰ 5-Hour Free Service: a0x1</blockquote>
+<blockquote>📡Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်: ${REGION}</blockquote>
 <pre><code>${URI}</code></pre>
 EOF
 )
