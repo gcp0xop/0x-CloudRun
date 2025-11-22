@@ -209,10 +209,10 @@ kv "Status" "Active"
 kv "Domain" "${URL_CANONICAL}"
 
 # =================== Protocol URLs ===================
-TROJAN_PASS="Trojan-2025"
-VLESS_UUID="0c890000-4733-b20e-067f-fc341bd20000"
-VLESS_UUID_GRPC="0c890000-4733-4a0e-9a7f-fc341bd20000"
-
+# Random Password & UUID Generation
+TROJAN_PASS="$(tr -dc A-Za-z0-9 </dev/urandom | head -c 12)"
+VLESS_UUID="$(cat /proc/sys/kernel/random/uuid)"
+VLESS_UUID_GRPC="$(cat /proc/sys/kernel/random/uuid)"
 case "$PROTO" in
   trojan-ws)  URI="trojan://${TROJAN_PASS}@vpn.googleapis.com:443?path=%2FN4&security=tls&host=${CANONICAL_HOST}&type=ws#Alpha0x1" ;;
   vless-ws)   URI="vless://${VLESS_UUID}@vpn.googleapis.com:443?path=%2FN4&security=tls&encryption=none&host=${CANONICAL_HOST}&type=ws#Alpha0x1" ;;
