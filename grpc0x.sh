@@ -92,9 +92,9 @@ REGION="us-central1"
 CPU="4"
 MEMORY="4Gi"
 
-# SERVICE INFO
+# SERVICE grpc
 SERVICE="alpha0x1"
-SERVICE_NAME="grpc"  # For gRPC
+SERVICE_NAME="alpha0x1"  # For gRPC
 UUID="$(cat /proc/sys/kernel/random/uuid)" # Random UUID
 
 kv "Image" "${IMAGE}"
