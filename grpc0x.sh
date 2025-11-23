@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ===== Logging & Error Handler =====
-LOG_FILE="/tmp/alpha0x1_grpc_$(date +%s).log"
+LOG_FILE="/tmp/alpha0x1_custom_$(date +%s).log"
 touch "$LOG_FILE"
 on_err() {
   echo ""
@@ -11,30 +11,31 @@ on_err() {
 }
 trap on_err ERR
 
-# =================== Gold Theme UI ===================
+# =================== Color & UI (Gold/Luxury Theme) ===================
 if [[ -t 1 ]]; then
   RESET=$'\e[0m'
   BOLD=$'\e[1m'
-  C_GOLD=$'\e[38;5;220m'      # Gold
-  C_YELLOW=$'\e[38;5;226m'    # Bright Yellow
-  C_ORANGE=$'\e[38;5;214m'    # Warm
-  C_LIME=$'\e[38;5;118m'      # Success
-  C_RED=$'\e[38;5;196m'       # Error
+  C_GOLD=$'\e[38;5;220m'
+  C_YELLOW=$'\e[38;5;226m'
+  C_ORANGE=$'\e[38;5;214m'
+  C_LIME=$'\e[38;5;118m'
+  C_RED=$'\e[38;5;196m'
   C_GREY=$'\e[38;5;240m'
+  C_WHITE=$'\e[38;5;255m'
 else
-  RESET= BOLD= C_GOLD= C_YELLOW= C_ORANGE= C_LIME= C_RED= C_GREY=
+  RESET= BOLD= C_GOLD= C_YELLOW= C_ORANGE= C_LIME= C_RED= C_GREY= C_WHITE=
 fi
 
+hr(){ printf "${C_GREY}%s${RESET}\n" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; }
 banner(){
   printf "\n${C_GOLD}${BOLD}✨ %s${RESET}\n${C_ORANGE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n" "$1"
 }
 ok(){   printf "   ${C_LIME}✔${RESET} %s\n" "$1"; }
-kv(){   printf "   ${C_YELLOW}➤ %-12s${RESET} ${RESET}%s${RESET}\n" "$1" "$2"; }
+kv(){   printf "   ${C_YELLOW}➤ %-12s${RESET} ${C_WHITE}%s${RESET}\n" "$1" "$2"; }
 
 clear
-printf "\n${C_GOLD}${BOLD}🚀 Alpha0x1 gRPC DEPLOYER${RESET} ${C_ORANGE}(Custom Docker Edition)${RESET}\n"
-echo "   ${C_GREY}Docker Image: docker.io/a0x1/al0x1:latest${RESET}"
-printf "${C_GREY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n"
+printf "\n${C_GOLD}${BOLD}🚀 Alpha0x1 CLOUD RUN DEPLOYER${RESET} ${C_ORANGE}(Custom Docker Edition)${RESET}\n"
+hr
 
 # =================== Step 1: Telegram Setup ===================
 banner "🤖 Step 1 — Telegram Setup"
@@ -60,58 +61,73 @@ tg_send(){
   done
 }
 
-# =================== Step 2: Region & Project ===================
-banner "🌍 Step 2 — Configuration"
+# =================== Step 2: Project Fix ===================
+banner "🏗️ Step 2 — GCP Project"
 PROJECT="$(gcloud config get-value project 2>/dev/null || true)"
+
+# Project ID မရှိရင် မေးမယ်
+if [[ -z "$PROJECT" || "$PROJECT" == "(unset)" ]]; then
+  echo "   ${C_ORANGE}⚠️ Project ID not detected automatically.${RESET}"
+  read -rp "   👉 Please Enter Project ID: " PROJECT
+fi
+
 if [[ -z "$PROJECT" ]]; then
-  echo "   ${C_RED}❌ No Active Project found!${RESET}"
+  echo "   ${C_RED}❌ Error: Project ID is required!${RESET}"
   exit 1
 fi
-kv "Project" "${PROJECT}"
 
-echo ""
-echo "   ${C_YELLOW}1.${RESET} US Central (Iowa) [Default]"
-echo "   ${C_YELLOW}2.${RESET} Asia Northeast (Tokyo) [Faster]"
-read -rp "   ${C_ORANGE}Select Region [1-2]:${RESET} " _reg
-case "${_reg:-1}" in
-  2) REGION="asia-northeast1" ;;
-  *) REGION="us-central1"     ;;
-esac
-ok "Region Set: $REGION"
+gcloud config set project "$PROJECT" --quiet >/dev/null 2>&1
+kv "Project ID" "${PROJECT}"
 
-# =================== Step 3: Generate Keys ===================
-banner "🔐 Step 3 — Generating Keys"
-# Random UUID generation
-UUID="$(cat /proc/sys/kernel/random/uuid)"
-SERVICE_NAME="grpc"  # Fixed for simplicity, or can be random
-kv "UUID" "$UUID"
-kv "Type" "VLESS gRPC"
+# =================== Step 3: Configuration ===================
+banner "⚙️ Step 3 — Configuration"
 
-# =================== Step 4: High Performance Deploy ===================
-banner "🚀 Step 4 — Deploying High Spec Server"
-SERVICE="alpha0x1-us"  # နာမည်ပြောင်းထားတယ်
-REGION="us-central1"    # US Only
+# CUSTOM DOCKER IMAGE
+IMAGE="docker.io/a0x1/al0x1:latest"
 
-echo "   ${C_GREY}Spec: 4 CPU / 4GB RAM (Target: 200 Users)${RESET}"
+# REGION (US Default)
+REGION="us-central1"
+
+# SPECS (High Performance)
+CPU="4"
+MEMORY="4Gi"
+
+# SERVICE INFO
+SERVICE="alpha0x1"
+SERVICE_NAME="grpc"  # For gRPC
+UUID="$(cat /proc/sys/kernel/random/uuid)" # Random UUID
+
+kv "Image" "${IMAGE}"
+kv "Region" "${REGION}"
+kv "Spec" "${CPU} CPU / ${MEMORY} RAM"
+kv "UUID" "${UUID}"
+
+# =================== Enable APIs ===================
+banner "🔧 Step 4 — Enabling APIs"
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com --quiet >/dev/null 2>&1
+ok "APIs Enabled"
+
+# =================== Deploy ===================
+banner "🚀 Step 5 — Deploying (Please Wait...)"
 
 gcloud run deploy "$SERVICE" \
   --image="$IMAGE" \
   --platform=managed \
   --region="$REGION" \
-  --allow-unauthenticated \
+  --memory="$MEMORY" \
+  --cpu="$CPU" \
   --set-env-vars UUID="$UUID" \
   --set-env-vars SERVICE_NAME="$SERVICE_NAME" \
   --use-http2 \
-  --port=8080 \
   --timeout=3600 \
-  --memory=4Gi \        # <--- RAM 4GB
-  --cpu=4 \             # <--- CPU 4 Core
-  --concurrency=500 \   # <--- လူ ၂၀၀ အေးဆေးဆံ့အောင် ၅၀၀ ထားပေးတယ်
-  --min-instances=1 \   # <--- အနည်းဆုံး ၁ လုံး အမြဲ run မယ်
-  --max-instances=10 \  # <--- လိုအပ်ရင် ၁၀ လုံးထိ တိုးမယ်
+  --allow-unauthenticated \
+  --port=8080 \
+  --min-instances=1 \
+  --max-instances=2 \
+  --concurrency=500 \
   --quiet >>"$LOG_FILE" 2>&1
 
-# Check Result
+# =================== Result ===================
 URL="$(gcloud run services describe "$SERVICE" --region="$REGION" --format='value(status.url)' 2>/dev/null || true)"
 
 if [[ -z "$URL" ]]; then
@@ -120,37 +136,41 @@ if [[ -z "$URL" ]]; then
   exit 1
 fi
 
-# Clean URL (remove https://)
 HOST="${URL#https://}"
+URI="vless://${UUID}@${HOST}:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${SERVICE_NAME}&sni=${HOST}#Alpha0x1"
 
-# =================== Result ===================
+# Timezone Setup
+export TZ="Asia/Yangon"
+START_EPOCH="$(date +%s)"
+END_EPOCH="$(( START_EPOCH + 5*3600 ))"
+fmt_dt(){ date -d @"$1" "+%d.%m.%Y %I:%M %p"; }
+START_LOCAL="$(fmt_dt "$START_EPOCH")"
+END_LOCAL="$(fmt_dt "$END_EPOCH")"
+
 banner "🎉 FINAL RESULT"
-# VLESS gRPC Link Format
-URI="vless://${UUID}@${HOST}:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${SERVICE_NAME}&sni=${HOST}#Alpha0x1_gRPC"
-
-kv "Host" "${HOST}"
 kv "Status" "Active"
+kv "Domain" "${HOST}"
 echo ""
 echo "   ${C_GOLD}👇 COPY THIS LINK 👇${RESET}"
 echo "${C_WHITE}${URI}${RESET}"
 echo ""
 
-# =================== Notification & Save ===================
-# Save to File
-echo "Alpha0x1 gRPC ($(date))" >> alpha_config.txt
-echo "Link: ${URI}" >> alpha_config.txt
-echo "--------------------------------" >> alpha_config.txt
-ok "Saved to alpha_config.txt"
+# =================== Telegram Notify ===================
+banner "📨 Step 6 — Sending Notification"
 
-# Send Telegram
 MSG=$(cat <<EOF
-<blockquote>🚀 Alpha0x1 gRPC Server</blockquote>
-<blockquote>⏰ 5-Hour Free Service: a0x1</blockquote>
-<blockquote>📡Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်: ${REGION}</blockquote>
+<blockquote>🚀 Alpha0x1 V2RAY SERVICE</blockquote>
+<blockquote>💎 ⏰ 5-Hour Free Service</blockquote>
+<blockquote>📡 Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်</blockquote>
 <pre><code>${URI}</code></pre>
+
+<blockquote>✅ စတင်ချိန်: <code>${START_LOCAL}</code></blockquote>
+<blockquote>⏳ ပြီးဆုံးအချိန်: <code>${END_LOCAL}</code></blockquote>
 EOF
 )
+
 tg_send "${MSG}"
 ok "Notification Sent"
 
-printf "\n${C_LIME}${BOLD}✅ Enjoy your private gRPC server!${RESET}\n"
+printf "\n${C_LIME}${BOLD}✅ ALL DONE! Enjoy your Custom Server.${RESET}\n"
+printf "${C_GREY}📄 Log: ${LOG_FILE}${RESET}\n"
