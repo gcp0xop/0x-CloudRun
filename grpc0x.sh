@@ -25,7 +25,6 @@ if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   RESET=$'\e[0m'
   BOLD=$'\e[1m'
   
-  # Gold & Luxury Palette
   C_GOLD=$'\e[38;5;220m'
   C_YELLOW=$'\e[38;5;226m'
   C_ORANGE=$'\e[38;5;214m'
@@ -48,7 +47,7 @@ err(){  printf "   ${C_RED}✘${RESET} %s\n" "$1"; }
 kv(){   printf "   ${C_YELLOW}➤ %-12s${RESET} ${C_WHITE}%s${RESET}\n" "$1" "$2"; }
 
 clear
-printf "\n${C_GOLD}${BOLD}🚀 Alpha0x1 CLOUD RUN DEPLOYER${RESET} ${C_ORANGE}(Custom Docker Edition)${RESET}\n"
+printf "\n${C_GOLD}${BOLD}🚀 Alpha0x1 CLOUD RUN DEPLOYER${RESET} ${C_ORANGE}(Premium Edition)${RESET}\n"
 hr
 
 # =================== Simple spinner ===================
@@ -88,19 +87,16 @@ if [[ ( -z "${TELEGRAM_TOKEN}" || -z "${TELEGRAM_CHAT_IDS}" ) && -f .env ]]; the
   set -a; source ./.env; set +a
 fi
 
-if [[ -z "${TELEGRAM_TOKEN}" ]]; then
-  read -rp "   ${C_GOLD}💎 Bot Token:${RESET} " _tk || true
-  [[ -n "${_tk:-}" ]] && TELEGRAM_TOKEN="$_tk"
+read -rp "   ${C_GOLD}💎 Bot Token:${RESET} " _tk || true
+[[ -n "${_tk:-}" ]] && TELEGRAM_TOKEN="$_tk"
+if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then
+  warn "Token empty! No notifications will be sent."
 else
-  ok "Token found."
+  ok "Token saved."
 fi
 
-if [[ -z "${TELEGRAM_CHAT_IDS}" ]]; then
-  read -rp "   ${C_GOLD}💎 Chat ID:${RESET}   " _ids || true
-  [[ -n "${_ids:-}" ]] && TELEGRAM_CHAT_IDS="${_ids// /}"
-else
-  ok "Chat ID found."
-fi
+read -rp "   ${C_GOLD}💎 Chat ID:${RESET}   " _ids || true
+[[ -n "${_ids:-}" ]] && TELEGRAM_CHAT_IDS="${_ids// /}"
 
 CHAT_ID_ARR=()
 IFS=',' read -r -a CHAT_ID_ARR <<< "${TELEGRAM_CHAT_IDS:-}" || true
@@ -122,10 +118,12 @@ tg_send(){
 banner "🏗️ Step 2 — GCP Project"
 PROJECT="$(gcloud config get-value project 2>/dev/null || true)"
 
-# Fix for unset project
+# Auto Fix for unset project
 if [[ -z "$PROJECT" || "$PROJECT" == "(unset)" ]]; then
-  echo "   ${C_ORANGE}⚠️ Project ID not detected automatically.${RESET}"
-  read -rp "   👉 Please Enter Project ID: " PROJECT
+  PROJECT="${DEVSHELL_PROJECT_ID:-}"
+  if [[ -z "$PROJECT" ]]; then
+     read -rp "   👉 Enter Project ID: " PROJECT
+  fi
 fi
 
 if [[ -z "$PROJECT" ]]; then
@@ -140,20 +138,22 @@ kv "Project ID" "${PROJECT}"
 # =================== Step 3: Configuration ===================
 banner "⚙️ Step 3 — Configuration"
 
-# CUSTOM SETTINGS FOR YOUR DOCKER
+# CUSTOM DOCKER & SETTINGS
 IMAGE="docker.io/a0x1/al0x1:latest"
-SERVICE="alpha0x1"
-SERVICE_NAME="alphas0x1"
-UUID="$(cat /proc/sys/kernel/random/uuid)" # Random UUID
 REGION="us-central1"
-CPU="2"
-MEMORY="2Gi"
+CPU="4"
+MEMORY="4Gi"
+SERVICE="alpha0x1"
+SERVICE_NAME="Tg-@Alpha0x1"  # gRPC Service Name
 PORT="8080"
 
+# Random UUID
+UUID="$(cat /proc/sys/kernel/random/uuid)"
+
 kv "Region" "${REGION}"
-kv "Image" "${IMAGE}"
-kv "Spec" "${CPU} CPU / ${MEMORY} RAM"
-kv "UUID" "${UUID}"
+kv "Service" "${SERVICE}"
+kv "Docker" "${IMAGE}"
+kv "Specs" "${CPU} CPU / ${MEMORY} RAM"
 
 # =================== Timezone Setup ===================
 export TZ="Asia/Yangon"
@@ -181,29 +181,30 @@ run_with_progress "Pushing ${SERVICE} to Cloud Run" \
     --region="$REGION" \
     --memory="$MEMORY" \
     --cpu="$CPU" \
-    --timeout="$TIMEOUT" \
+    --set-env-vars UUID="$UUID" \
+    --set-env-vars SERVICE_NAME="$SERVICE_NAME" \
+    --use-http2 \
     --allow-unauthenticated \
     --port="$PORT" \
     --min-instances=1 \
+    --concurrency=300 \
     --quiet
 
 # =================== Result ===================
 URL="$(gcloud run services describe "$SERVICE" --region="$REGION" --format='value(status.url)' 2>/dev/null || true)"
 
 if [[ -z "$URL" ]]; then
-  echo "   ${C_RED}❌ Deployment Failed! Check logs.${RESET}"
-  tail -n 10 "$LOG_FILE"
-  exit 1
+  err "Deployment Failed! Check logs."
 fi
 
-HOST="${URL#https://}"
-# Generating vpn.googleapis.com Link
-URI="vless://${UUID}@vpn.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${SERVICE_NAME}&sni=${HOST}#Alpha0x1"
-
+CANONICAL_HOST="${URL#https://}"
 banner "🎉 FINAL RESULT"
 kv "Status" "Active"
-kv "Host" "${HOST}"
-kv "Address" "vpn.googleapis.com"
+kv "Host" "${CANONICAL_HOST}"
+
+# =================== Protocol URLs ===================
+# Using dl.google.com for Best Speed (MUST BE VISIBLE)
+URI="vless://${UUID}@dl.google.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${SERVICE_NAME}&sni=${CANONICAL_HOST}#Alpha0x1"
 
 # =================== Telegram Notify ===================
 banner "📨 Step 7 — Sending Notification"
