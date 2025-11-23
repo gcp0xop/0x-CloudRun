@@ -1,155 +1,214 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ===== NEON UI THEME =====
-if [[ -t 1 ]]; then
+# ===== Ensure interactive reads even when run via curl/process substitution =====
+if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
+  exec </dev/tty
+fi
+
+# ===== Logging & error handler =====
+LOG_FILE="/tmp/alpha0x1_deploy_$(date +%s).log"
+touch "$LOG_FILE"
+on_err() {
+  local rc=$?
+  echo "" | tee -a "$LOG_FILE"
+  echo "❌ ERROR: Command failed (exit $rc) at line $LINENO: ${BASH_COMMAND}" | tee -a "$LOG_FILE" >&2
+  echo "—— LOG (last 80 lines) ——" >&2
+  tail -n 80 "$LOG_FILE" >&2 || true
+  echo "📄 Log File: $LOG_FILE" >&2
+  exit $rc
+}
+trap on_err ERR
+
+# =================== Color & UI (Gold/Luxury Theme) ===================
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   RESET=$'\e[0m'
   BOLD=$'\e[1m'
-  # Neon Palette
-  NEON_PINK=$'\e[38;5;198m'
-  NEON_CYAN=$'\e[38;5;51m'
-  NEON_LIME=$'\e[38;5;118m'
-  NEON_YELLOW=$'\e[38;5;226m'
-  NEON_RED=$'\e[38;5;196m'
-  NEON_WHITE=$'\e[38;5;231m'
+  
+  C_GOLD=$'\e[38;5;220m'
+  C_YELLOW=$'\e[38;5;226m'
+  C_ORANGE=$'\e[38;5;214m'
+  C_LIME=$'\e[38;5;118m'
+  C_RED=$'\e[38;5;196m'
+  C_GREY=$'\e[38;5;240m'
+  C_WHITE=$'\e[38;5;255m'
 else
-  RESET= BOLD= NEON_PINK= NEON_CYAN= NEON_LIME= NEON_YELLOW= NEON_RED= NEON_WHITE=
+  RESET= BOLD= C_GOLD= C_YELLOW= C_ORANGE= C_LIME= C_RED= C_GREY= C_WHITE=
 fi
 
-# ===== Helper Functions =====
-line(){ printf "${NEON_CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n"; }
+hr(){ printf "${C_GREY}%s${RESET}\n" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; }
 banner(){
-  echo ""
-  printf "${NEON_PINK}${BOLD}✨ %s${RESET}\n" "$1"
-  line
+  local title="$1"
+  printf "\n${C_GOLD}${BOLD}✨ %s${RESET}\n${C_ORANGE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n" "$title"
 }
-info(){ printf "   ${NEON_YELLOW}➤ %-12s${RESET} ${NEON_WHITE}%s${RESET}\n" "$1" "$2"; }
-ok(){   printf "   ${NEON_LIME}✅ %s${RESET}\n" "$1"; }
-err(){  printf "   ${NEON_RED}❌ %s${RESET}\n" "$1"; exit 1; }
+ok(){   printf "   ${C_LIME}✔${RESET} %s\n" "$1"; }
+warn(){ printf "   ${C_ORANGE}⚠${RESET} %s\n" "$1"; }
+err(){  printf "   ${C_RED}✘${RESET} %s\n" "$1"; }
+kv(){   printf "   ${C_YELLOW}➤ %-12s${RESET} ${C_WHITE}%s${RESET}\n" "$1" "$2"; }
 
-# ===== Header =====
 clear
-printf "\n${NEON_PINK}${BOLD}🚀 ALPHA0x1 NEON DEPLOYER${RESET} ${NEON_LIME}(Ultimate Edition)${RESET}\n"
-line
+printf "\n${C_GOLD}${BOLD}🚀 Alpha0x1 CLOUD RUN DEPLOYER${RESET} ${C_ORANGE}(Premium Edition)${RESET}\n"
+hr
 
-# =================== Step 1: Telegram Setup ===================
+# =================== Simple spinner ===================
+run_with_progress() {
+  local label="$1"; shift
+  ( "$@" ) >>"$LOG_FILE" 2>&1 &
+  local pid=$!
+  local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+  local i=0
+  if [[ -t 1 ]]; then
+    printf "\e[?25l" # Hide cursor
+    while kill -0 "$pid" 2>/dev/null; do
+      i=$(( (i+1) %10 ))
+      printf "\r   ${C_GOLD}${spin:$i:1}${RESET} %s..." "$label"
+      sleep 0.1
+    done
+    wait "$pid"; local rc=$?
+    printf "\r\e[K" # Clear line
+    if (( rc==0 )); then
+      printf "   ${C_LIME}✅${RESET} %s\n" "$label"
+    else
+      printf "   ${C_RED}❌${RESET} %s failed (see %s)\n" "$label" "$LOG_FILE"
+      return $rc
+    fi
+    printf "\e[?25h" # Show cursor
+  else
+    wait "$pid"
+  fi
+}
+
+# =================== Step 1: Telegram Config ===================
 banner "🤖 Step 1 — Telegram Setup"
 TELEGRAM_TOKEN="${TELEGRAM_TOKEN:-}"
-TELEGRAM_CHAT_IDS="${TELEGRAM_CHAT_IDS:-}"
+TELEGRAM_CHAT_IDS="${TELEGRAM_CHAT_IDS:-${TELEGRAM_CHAT_ID:-}}"
 
-# Auto-detect or ask (Clean Interface)
-if [[ -z "${TELEGRAM_TOKEN}" ]]; then
-  read -rp "   ${NEON_PINK}💎 Bot Token:${RESET} " _tk || true
-  [[ -n "${_tk}" ]] && TELEGRAM_TOKEN="$_tk"
-else
-  ok "Token Detected"
+if [[ ( -z "${TELEGRAM_TOKEN}" || -z "${TELEGRAM_CHAT_IDS}" ) && -f .env ]]; then
+  set -a; source ./.env; set +a
 fi
 
-if [[ -z "${TELEGRAM_CHAT_IDS}" ]]; then
-  read -rp "   ${NEON_PINK}💎 Chat ID:${RESET}   " _ids || true
-  [[ -n "${_ids}" ]] && TELEGRAM_CHAT_IDS="${_ids// /}"
+read -rp "   ${C_GOLD}💎 Bot Token:${RESET} " _tk || true
+[[ -n "${_tk:-}" ]] && TELEGRAM_TOKEN="$_tk"
+if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then
+  warn "Token empty! No notifications will be sent."
 else
-  ok "Chat ID Detected"
+  ok "Token saved."
 fi
+
+read -rp "   ${C_GOLD}💎 Chat ID:${RESET}   " _ids || true
+[[ -n "${_ids:-}" ]] && TELEGRAM_CHAT_IDS="${_ids// /}"
+
+CHAT_ID_ARR=()
+IFS=',' read -r -a CHAT_ID_ARR <<< "${TELEGRAM_CHAT_IDS:-}" || true
 
 tg_send(){
   local text="$1"
-  [[ -z "${TELEGRAM_TOKEN}" || -z "${TELEGRAM_CHAT_IDS}" ]] && return 0
-  IFS=',' read -r -a CHAT_ID_ARR <<< "${TELEGRAM_CHAT_IDS}"
+  if [[ -z "${TELEGRAM_TOKEN:-}" || ${#CHAT_ID_ARR[@]} -eq 0 ]]; then return 0; fi
   for _cid in "${CHAT_ID_ARR[@]}"; do
-    curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-      -d "chat_id=${_cid}" --data-urlencode "text=${text}" -d "parse_mode=HTML" >/dev/null 2>&1 || true
+    curl -s -S -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+      -d "chat_id=${_cid}" \
+      --data-urlencode "text=${text}" \
+      -d "parse_mode=HTML" \
+      >>"$LOG_FILE" 2>&1
+    ok "Sent to ID: ${_cid}"
   done
 }
 
-# =================== Step 2: Project Check ===================
-banner "🏗️ Step 2 — Checking Project"
+# =================== Step 2: Project ===================
+banner "🏗️ Step 2 — GCP Project"
 PROJECT="$(gcloud config get-value project 2>/dev/null || true)"
 
-# Smart Fix for Unset Project
+# Auto Fix for unset project
 if [[ -z "$PROJECT" || "$PROJECT" == "(unset)" ]]; then
-  printf "   ${NEON_YELLOW}⚠️ Project ID missing. Attempting auto-fix...${RESET}\n"
   PROJECT="${DEVSHELL_PROJECT_ID:-}"
   if [[ -z "$PROJECT" ]]; then
-     read -rp "   👉 Enter Project ID manually: " PROJECT
+     read -rp "   👉 Enter Project ID: " PROJECT
   fi
 fi
 
-if [[ -z "$PROJECT" ]]; then err "Project ID Required!"; fi
+if [[ -z "$PROJECT" ]]; then
+  err "No active project. Run: gcloud config set project ID"
+  exit 1
+fi
 
 gcloud config set project "$PROJECT" --quiet >/dev/null 2>&1
-info "Project" "${PROJECT}"
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')" || true
+kv "Project ID" "${PROJECT}"
 
 # =================== Step 3: Configuration ===================
-banner "⚙️ Step 3 — Server Config"
+banner "⚙️ Step 3 — Configuration"
 
-# --- CUSTOM SETTINGS ---
+# CUSTOM DOCKER & SETTINGS
 IMAGE="docker.io/a0x1/al0x1:latest"
-SERVICE="alpha0x1"
-SERVICE_NAME="Tg-@Alpha0x1"           # <--- Requested Name
 REGION="us-central1"
 CPU="4"
 MEMORY="4Gi"
+SERVICE="alpha0x1"
+SERVICE_NAME="Tg-@Alpha0x1"  # gRPC Service Name
+PORT="8080"
+
+# Random UUID
 UUID="$(cat /proc/sys/kernel/random/uuid)"
-# -----------------------
 
-info "Docker"    "${IMAGE}"
-info "Service"   "${SERVICE_NAME}"
-info "Spec"      "${CPU} CPU / ${MEMORY} RAM"
-info "Region"    "US Central (dl.google.com)"
+kv "Region" "${REGION}"
+kv "Service" "${SERVICE}"
+kv "Docker" "${IMAGE}"
+kv "Specs" "${CPU} CPU / ${MEMORY} RAM"
 
-# =================== Step 4: Deploy ===================
-banner "🚀 Step 4 — Deploying (Max 2 Instances)"
+# =================== Timezone Setup ===================
+export TZ="Asia/Yangon"
+START_EPOCH="$(date +%s)"
+END_EPOCH="$(( START_EPOCH + 5*3600 ))" # 5 hours later
+fmt_dt(){ date -d @"$1" "+%d.%m.%Y %I:%M %p"; }
+START_LOCAL="$(fmt_dt "$START_EPOCH")"
+END_LOCAL="$(fmt_dt "$END_EPOCH")"
 
-# Enable APIs silently
-gcloud services enable run.googleapis.com cloudbuild.googleapis.com --quiet >/dev/null 2>&1
+banner "🕒 Step 4 — Deployment Time"
+kv "Start:" "${START_LOCAL}"
+kv "End:"   "${END_LOCAL}"
 
-printf "   ${NEON_CYAN}⏳ Pushing to Google Cloud... Please wait...${RESET}\n"
+# =================== Enable APIs ===================
+banner "🔧 Step 5 — Setup APIs"
+run_with_progress "Enabling CloudRun API" \
+  gcloud services enable run.googleapis.com cloudbuild.googleapis.com --quiet
 
-# Deploy Command
-gcloud run deploy "$SERVICE" \
-  --image="$IMAGE" \
-  --platform=managed \
-  --region="$REGION" \
-  --memory="$MEMORY" \
-  --cpu="$CPU" \
-  --set-env-vars UUID="$UUID" \
-  --set-env-vars SERVICE_NAME="$SERVICE_NAME" \
-  --use-http2 \
-  --allow-unauthenticated \
-  --port=8080 \
-  --min-instances=1 \
-  --max-instances=2 \
-  --concurrency=500 \
-  --quiet >/dev/null 2>&1
+# =================== Deploy ===================
+banner "🚀 Step 6 — Deploying"
+run_with_progress "Pushing ${SERVICE} to Cloud Run" \
+  gcloud run deploy "$SERVICE" \
+    --image="$IMAGE" \
+    --platform=managed \
+    --region="$REGION" \
+    --memory="$MEMORY" \
+    --cpu="$CPU" \
+    --set-env-vars UUID="$UUID" \
+    --set-env-vars SERVICE_NAME="$SERVICE_NAME" \
+    --use-http2 \
+    --allow-unauthenticated \
+    --port="$PORT" \
+    --min-instances=1 \
+    --max-instances=2 \
+    --concurrency=500 \
+    --quiet
 
-# Check Status
+# =================== Result ===================
 URL="$(gcloud run services describe "$SERVICE" --region="$REGION" --format='value(status.url)' 2>/dev/null || true)"
 
-if [[ -z "$URL" ]]; then err "Deployment Failed! Check Cloud Run logs."; fi
+if [[ -z "$URL" ]]; then
+  err "Deployment Failed! Check logs."
+fi
 
-HOST="${URL#https://}"
-
-# === LINK GENERATION (dl.google.com + Custom ServiceName) ===
-URI="vless://${UUID}@dl.google.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${SERVICE_NAME}&sni=${HOST}#Alpha0x1"
-
-# =================== Step 5: Final Result ===================
-# Timezone
-export TZ="Asia/Yangon"
-START_LOCAL="$(date "+%d.%m.%Y %I:%M %p")"
-END_LOCAL="$(date -d "+5 hours" "+%d.%m.%Y %I:%M %p")"
-
+CANONICAL_HOST="${URL#https://}"
 banner "🎉 FINAL RESULT"
-info "Status"  "Active (VIP Line)"
-info "Address" "dl.google.com"
-info "Path"    "${SERVICE_NAME}"
-echo ""
-printf "   ${NEON_PINK}👇 COPY THIS LINK 👇${RESET}\n"
-printf "   ${NEON_WHITE}%s${RESET}\n" "${URI}"
-echo ""
+kv "Status" "Active"
+kv "Host" "${CANONICAL_HOST}"
+
+# =================== Protocol URLs ===================
+# Using dl.google.com for Best Speed (MUST BE VISIBLE)
+URI="vless://${UUID}@dl.google.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${SERVICE_NAME}&sni=${CANONICAL_HOST}#Alpha0x1"
 
 # =================== Telegram Notify ===================
-banner "📨 Step 6 — Sending Notification"
+banner "📨 Step 7 — Sending Notification"
 
 MSG=$(cat <<EOF
 <blockquote>🚀 Alpha0x1 V2RAY SERVICE</blockquote>
@@ -163,6 +222,6 @@ EOF
 )
 
 tg_send "${MSG}"
-ok "Notification Sent!"
 
-printf "\n${NEON_LIME}${BOLD}✅ ALL DONE! Enjoy your Alpha0x1 Server.${RESET}\n"
+printf "\n${C_LIME}${BOLD}✅ ALL DONE! Enjoy your Alpha0x1 Server.${RESET}\n"
+printf "${C_GREY}📄 Log: ${LOG_FILE}${RESET}\n"
