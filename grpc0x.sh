@@ -143,7 +143,7 @@ banner "⚙️ Step 3 — Configuration"
 # CUSTOM SETTINGS FOR YOUR DOCKER
 IMAGE="docker.io/a0x1/al0x1:latest"
 SERVICE="alpha0x1"
-SERVICE_NAME="alphas0x1"  # Internal service name for gRPC
+SERVICE_NAME="alphas0x1"
 UUID="$(cat /proc/sys/kernel/random/uuid)" # Random UUID
 REGION="us-central1"
 CPU="2"
@@ -181,14 +181,10 @@ run_with_progress "Pushing ${SERVICE} to Cloud Run" \
     --region="$REGION" \
     --memory="$MEMORY" \
     --cpu="$CPU" \
-    --set-env-vars UUID="$UUID" \
-    --set-env-vars SERVICE_NAME="$SERVICE_NAME" \
-    --use-http2 \
+    --timeout="$TIMEOUT" \
     --allow-unauthenticated \
     --port="$PORT" \
-    --concurrency=200 \
     --min-instances=1 \
-    --max-instances=4 \
     --quiet
 
 # =================== Result ===================
