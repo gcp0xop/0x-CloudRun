@@ -7,7 +7,7 @@ if [[ ! -t 0 ]] && [[ -e /dev/tty ]]; then
 fi
 
 # ===== Logging & error handler =====
-LOG_FILE="/tmp/alpha0x1_deploy_$(date +%s).log"
+LOG_FILE="/tmp/alpha0x1_final_$(date +%s).log"
 touch "$LOG_FILE"
 on_err() {
   local rc=$?
@@ -47,7 +47,7 @@ err(){  printf "   ${C_RED}✘${RESET} %s\n" "$1"; }
 kv(){   printf "   ${C_YELLOW}➤ %-12s${RESET} ${C_WHITE}%s${RESET}\n" "$1" "$2"; }
 
 clear
-printf "\n${C_GOLD}${BOLD}🚀 Alpha0x1 CLOUD RUN DEPLOYER${RESET} ${C_ORANGE}(Premium Edition)${RESET}\n"
+printf "\n${C_GOLD}${BOLD}🚀 Alpha0x1 CLOUD RUN DEPLOYER${RESET} ${C_ORANGE}(Stable Edition)${RESET}\n"
 hr
 
 # =================== Simple spinner ===================
@@ -138,22 +138,22 @@ kv "Project ID" "${PROJECT}"
 # =================== Step 3: Configuration ===================
 banner "⚙️ Step 3 — Configuration"
 
-# CUSTOM DOCKER & SETTINGS
+# CUSTOM SETTINGS
 IMAGE="docker.io/a0x1/al0x1:latest"
-REGION="us-central1"
-CPU="4"
-MEMORY="4Gi"
 SERVICE="alpha0x1"
-SERVICE_NAME="Tg-@Alpha0x1"  # gRPC Service Name
-PORT="8080"
+SERVICE_NAME="Tg-@Alpha0x1"
+REGION="us-central1"
 
-# Random UUID
+# SPECS (Stable for ~300 Users)
+CPU="2"
+MEMORY="2Gi"
+PORT="8080"
 UUID="$(cat /proc/sys/kernel/random/uuid)"
 
 kv "Region" "${REGION}"
 kv "Service" "${SERVICE}"
-kv "Docker" "${IMAGE}"
 kv "Specs" "${CPU} CPU / ${MEMORY} RAM"
+kv "Target" "~300 Users (High Stability)"
 
 # =================== Timezone Setup ===================
 export TZ="Asia/Yangon"
@@ -187,7 +187,8 @@ run_with_progress "Pushing ${SERVICE} to Cloud Run" \
     --allow-unauthenticated \
     --port="$PORT" \
     --min-instances=1 \
-    --concurrency=300 \
+    --max-instances=3 \
+    --concurrency=200 \
     --quiet
 
 # =================== Result ===================
@@ -203,8 +204,8 @@ kv "Status" "Active"
 kv "Host" "${CANONICAL_HOST}"
 
 # =================== Protocol URLs ===================
-# Using dl.google.com for Best Speed (MUST BE VISIBLE)
-URI="vless://${UUID}@dl.google.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${SERVICE_NAME}&sni=${CANONICAL_HOST}#Alpha0x1"
+# Address: vpn.googleapis.com (As Requested)
+URI="vless://${UUID}@vpn.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${SERVICE_NAME}&sni=${CANONICAL_HOST}#Alpha0x1"
 
 # =================== Telegram Notify ===================
 banner "📨 Step 7 — Sending Notification"
