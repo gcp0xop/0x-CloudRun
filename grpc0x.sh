@@ -159,7 +159,6 @@ run_with_progress "Deploying Container..." \
     --timeout="$TIMEOUT" \
     --allow-unauthenticated \
     --use-http2 \
-    --no-cpu-throttling \
     --port="$PORT" \
     --min-instances=1 \
     --max-instances=2 \
