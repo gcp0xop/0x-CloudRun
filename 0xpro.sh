@@ -41,7 +41,7 @@ run_with_progress() {
 }
 
 clear
-printf "\n${RED}${BOLD}🚀 ALPHA${YELLOW}0x1 ${BLUE}ULTIMATE ${PURPLE}(${CYAN}Clean Edition${PURPLE})${RESET}\n"
+printf "\n${RED}${BOLD}🚀 ALPHA${YELLOW}0x1 ${BLUE}OMEGA ${PURPLE}(${CYAN}Auto-Count${PURPLE})${RESET}\n"
 hr
 
 # =================== 2. Setup ===================
@@ -51,23 +51,42 @@ if [[ -f .env ]]; then source ./.env; fi
 if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then read -rp "   ${CYAN}💎 Bot Token:${RESET} " TELEGRAM_TOKEN; fi
 if [[ -z "${TELEGRAM_CHAT_IDS:-}" ]]; then read -rp "   ${CYAN}💎 Chat ID:${RESET}   " TELEGRAM_CHAT_IDS; fi
 
-# =================== 3. Configuration ===================
-banner "⚙️ Step 2 — Config"
+# =================== 3. Configuration & Counter ===================
+banner "⚙️ Step 2 — Configuration"
+
+# 🔥 COUNTER LOGIC
+COUNT_FILE=".alpha_counter"
+if [[ ! -f "$COUNT_FILE" ]]; then echo "0" > "$COUNT_FILE"; fi
+CURRENT_COUNT=$(<"$COUNT_FILE")
+NEXT_COUNT=$((CURRENT_COUNT + 1))
+echo "$NEXT_COUNT" > "$COUNT_FILE"
+
+# Format to 3 digits (e.g., 001, 002)
+SUFFIX=$(printf "%03d" "$NEXT_COUNT")
+SERVER_NAME="Alpha0x1-${SUFFIX}"
 
 GEN_UUID=$(cat /proc/sys/kernel/random/uuid)
-kv "Mode" "gRPC + Gen2 + Sticky Session"
+
+kv "Mode" "gRPC + Probes + Memory Tuning"
 kv "UUID" "${GEN_UUID}"
+kv "Name" "${SERVER_NAME}"
 
 SERVICE_NAME="alphas0x1"
 REGION="us-central1"
 IMAGE="a0x1/al0x1"
 GRPC_SERVICE_NAME="Tg-@Alpha0x1"
 
-# =================== 4. Deployment ===================
+# =================== 4. Deploying ===================
 banner "🚀 Step 3 — Deploying"
 
-# Added --session-affinity via beta command for maximum stability
-run_with_progress "Deploying to Cloud Run..." \
+# Optional Clean Up
+if gcloud run services describe "$SERVICE_NAME" --region "$REGION" >/dev/null 2>&1; then
+    run_with_progress "Preparing clean slate..." \
+    gcloud run services delete "$SERVICE_NAME" --region "$REGION" --quiet
+fi
+
+# Deploying with Omega Specs
+run_with_progress "Injecting Self-Healing System..." \
   gcloud beta run deploy "$SERVICE_NAME" \
     --image="$IMAGE" \
     --platform=managed \
@@ -78,10 +97,17 @@ run_with_progress "Deploying to Cloud Run..." \
     --allow-unauthenticated \
     --use-http2 \
     --no-cpu-throttling \
+    --cpu-boost \
     --execution-environment=gen2 \
     --concurrency=1000 \
     --session-affinity \
-    --set-env-vars UUID="${GEN_UUID}" \
+    --liveness-probe-tcp=8080 \
+    --liveness-probe-period=20s \
+    --liveness-probe-failure-threshold=3 \
+    --startup-probe-tcp=8080 \
+    --startup-probe-period=5s \
+    --startup-probe-failure-threshold=10 \
+    --set-env-vars UUID="${GEN_UUID}",GOMEMLIMIT="3600MiB",GOGC="100" \
     --port="8080" \
     --min-instances=1 \
     --max-instances=2 \
@@ -90,27 +116,31 @@ run_with_progress "Deploying to Cloud Run..." \
 URL=$(gcloud run services describe "$SERVICE_NAME" --platform managed --region "$REGION" --format 'value(status.url)')
 DOMAIN=${URL#https://}
 
+run_with_progress "Finalizing & Warming up..." \
+  curl -s -o /dev/null "https://${DOMAIN}"
+
 banner "🎉 FINAL RESULT"
-kv "Status" "Active"
+kv "Status" "Immortal (Probes Active)"
 kv "Domain" "${DOMAIN}"
 
 # =================== 5. Notification ===================
 banner "📨 Step 4 — Notification"
 
-URI="vless://${GEN_UUID}@vpn.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${GRPC_SERVICE_NAME}&sni=${DOMAIN}#Alpha0x1-gRPC"
+# Link uses the auto-incremented SERVER_NAME
+URI="vless://${GEN_UUID}@vpn.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${GRPC_SERVICE_NAME}&sni=${DOMAIN}#${SERVER_NAME}"
 
 export TZ="Asia/Yangon"
 START_LOCAL="$(date +'%d.%m.%Y %I:%M %p')"
 END_LOCAL="$(date -d '+5 hours' +'%d.%m.%Y %I:%M %p')"
 
 MSG=$(cat <<EOF
-<blockquote>🚀 Alpha0x1 V2RAY SERVICE</blockquote>
+<blockquote>🚀 ${SERVER_NAME} SERVICE</blockquote>
 <blockquote>⏰ 5-Hour Free Service</blockquote>
-<blockquote>📡Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်</blockquote>
+<blockquote>📡 Unlimited Data / Bypass Restricted Areas</blockquote>
 <pre><code>${URI}</code></pre>
 
-<blockquote>✅ စတင်ချိန်: <code>${START_LOCAL}</code></blockquote>
-<blockquote>⏳ပြီးဆုံးအချိန်: <code>${END_LOCAL}</code></blockquote>
+<blockquote>✅ Start: <code>${START_LOCAL}</code></blockquote>
+<blockquote>⏳ End: <code>${END_LOCAL}</code></blockquote>
 EOF
 )
 
@@ -128,4 +158,4 @@ else
 fi
 
 hr
-printf "${GREEN}${BOLD}✅ DEPLOYMENT COMPLETE.${RESET}\n"
+printf "${GREEN}${BOLD}✅ OMEGA DEPLOYMENT COMPLETE.${RESET}\n"
