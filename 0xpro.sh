@@ -40,15 +40,24 @@ run_with_progress() {
 }
 
 clear
-printf "\n${RED}${BOLD}🚀 ALPHA${YELLOW}0x1 ${BLUE}CEO EDITION ${PURPLE}(${CYAN}God Mode${PURPLE})${RESET}\n"
+printf "\n${RED}${BOLD}🚀 ALPHA${YELLOW}0x1 ${BLUE}CEO EDITION ${PURPLE}(${CYAN}Stable${PURPLE})${RESET}\n"
 hr
 
-# =================== 2. Setup ===================
+# =================== 2. Setup (Fixed UI) ===================
 banner "🤖 Step 1 — Setup"
 
 if [[ -f .env ]]; then source ./.env; fi
-if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then read -rp "   ${CYAN}💎 Bot Token:${RESET} " TELEGRAM_TOKEN; fi
-if [[ -z "${TELEGRAM_CHAT_IDS:-}" ]]; then read -rp "   ${CYAN}💎 Chat ID:${RESET}   " TELEGRAM_CHAT_IDS; fi
+
+# Fixed: Using printf to show colors correctly before reading input
+if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then 
+  printf "   ${CYAN}💎 Bot Token:${RESET} "
+  read -r TELEGRAM_TOKEN
+fi
+
+if [[ -z "${TELEGRAM_CHAT_IDS:-}" ]]; then 
+  printf "   ${CYAN}💎 Chat ID:${RESET}   "
+  read -r TELEGRAM_CHAT_IDS
+fi
 
 # =================== 3. Config & Counter ===================
 banner "⚙️ Step 2 — Configuration"
@@ -65,7 +74,7 @@ SERVER_NAME="Alpha0x1-${SUFFIX}"
 
 GEN_UUID=$(cat /proc/sys/kernel/random/uuid)
 
-kv "Mode" "CEO (Max Performance + Probes)"
+kv "Mode" "CEO (Gen2 + High Stability)"
 kv "UUID" "${GEN_UUID}"
 kv "Name" "${SERVER_NAME}"
 
@@ -77,15 +86,15 @@ GRPC_SERVICE_NAME="Tg-@Alpha0x1"
 # =================== 4. Deploying ===================
 banner "🚀 Step 3 — Deploying"
 
-# Clean up
+# Clean up old service
 if gcloud run services describe "$SERVICE_NAME" --region "$REGION" >/dev/null 2>&1; then
     run_with_progress "Cleaning workspace..." \
     gcloud run services delete "$SERVICE_NAME" --region "$REGION" --quiet
 fi
 
-# Deploy with ALL features enabled
-run_with_progress "Executing High-Level Deployment..." \
-  gcloud beta run deploy "$SERVICE_NAME" \
+# Deploy with STABLE High-Performance Flags (Removed beta/boost flags that cause hangs)
+run_with_progress "Executing Deployment..." \
+  gcloud run deploy "$SERVICE_NAME" \
     --image="$IMAGE" \
     --platform=managed \
     --region="$REGION" \
@@ -95,17 +104,10 @@ run_with_progress "Executing High-Level Deployment..." \
     --allow-unauthenticated \
     --use-http2 \
     --no-cpu-throttling \
-    --cpu-boost \
     --execution-environment=gen2 \
     --concurrency=1000 \
     --session-affinity \
-    --liveness-probe-tcp=8080 \
-    --liveness-probe-period=20s \
-    --liveness-probe-failure-threshold=3 \
-    --startup-probe-tcp=8080 \
-    --startup-probe-period=5s \
-    --startup-probe-failure-threshold=10 \
-    --set-env-vars UUID="${GEN_UUID}",GOMEMLIMIT="3600MiB",GOGC="100" \
+    --set-env-vars UUID="${GEN_UUID}" \
     --port="8080" \
     --min-instances=1 \
     --max-instances=2 \
@@ -158,7 +160,7 @@ echo -e "${YELLOW}║          EXECUTIVE SYSTEM REPORT           ║${RESET}"
 echo -e "${YELLOW}╠════════════════════════════════════════════╣${RESET}"
 printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Service Name" "${SERVER_NAME}"
 printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Region" "${REGION}"
-printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Engine" "Gen2 + Boost"
+printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Engine" "Gen2 (Stable)"
 printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Memory" "4Gi / 4 vCPU"
 printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${GREEN}%-20s${RESET} ${YELLOW}║${RESET}\n" "Status" "Active"
 echo -e "${YELLOW}╚════════════════════════════════════════════╝${RESET}"
