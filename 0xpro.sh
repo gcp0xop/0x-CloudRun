@@ -17,7 +17,6 @@ banner(){ printf "\n${CYAN}${BOLD}✨ %s${RESET}\n${PURPLE}━━━━━━━
 ok(){ printf "   ${GREEN}✔${RESET} %s\n" "$1"; }
 kv(){ printf "   ${BLUE}➤ %-12s${RESET} ${WHITE}%s${RESET}\n" "$1" "$2"; }
 
-# Loading Spinner
 run_with_progress() {
   local label="$1"; shift
   ( "$@" ) >/dev/null 2>&1 &
@@ -41,7 +40,7 @@ run_with_progress() {
 }
 
 clear
-printf "\n${RED}${BOLD}🚀 ALPHA${YELLOW}0x1 ${BLUE}OMEGA ${PURPLE}(${CYAN}Auto-Count${PURPLE})${RESET}\n"
+printf "\n${RED}${BOLD}🚀 ALPHA${YELLOW}0x1 ${BLUE}CEO EDITION ${PURPLE}(${CYAN}God Mode${PURPLE})${RESET}\n"
 hr
 
 # =================== 2. Setup ===================
@@ -51,23 +50,22 @@ if [[ -f .env ]]; then source ./.env; fi
 if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then read -rp "   ${CYAN}💎 Bot Token:${RESET} " TELEGRAM_TOKEN; fi
 if [[ -z "${TELEGRAM_CHAT_IDS:-}" ]]; then read -rp "   ${CYAN}💎 Chat ID:${RESET}   " TELEGRAM_CHAT_IDS; fi
 
-# =================== 3. Configuration & Counter ===================
+# =================== 3. Config & Counter ===================
 banner "⚙️ Step 2 — Configuration"
 
-# 🔥 COUNTER LOGIC
+# Auto-Counter Logic
 COUNT_FILE=".alpha_counter"
 if [[ ! -f "$COUNT_FILE" ]]; then echo "0" > "$COUNT_FILE"; fi
 CURRENT_COUNT=$(<"$COUNT_FILE")
 NEXT_COUNT=$((CURRENT_COUNT + 1))
 echo "$NEXT_COUNT" > "$COUNT_FILE"
 
-# Format to 3 digits (e.g., 001, 002)
 SUFFIX=$(printf "%03d" "$NEXT_COUNT")
 SERVER_NAME="Alpha0x1-${SUFFIX}"
 
 GEN_UUID=$(cat /proc/sys/kernel/random/uuid)
 
-kv "Mode" "gRPC + Probes + Memory Tuning"
+kv "Mode" "CEO (Max Performance + Probes)"
 kv "UUID" "${GEN_UUID}"
 kv "Name" "${SERVER_NAME}"
 
@@ -79,14 +77,14 @@ GRPC_SERVICE_NAME="Tg-@Alpha0x1"
 # =================== 4. Deploying ===================
 banner "🚀 Step 3 — Deploying"
 
-# Optional Clean Up
+# Clean up
 if gcloud run services describe "$SERVICE_NAME" --region "$REGION" >/dev/null 2>&1; then
-    run_with_progress "Preparing clean slate..." \
+    run_with_progress "Cleaning workspace..." \
     gcloud run services delete "$SERVICE_NAME" --region "$REGION" --quiet
 fi
 
-# Deploying with Omega Specs
-run_with_progress "Injecting Self-Healing System..." \
+# Deploy with ALL features enabled
+run_with_progress "Executing High-Level Deployment..." \
   gcloud beta run deploy "$SERVICE_NAME" \
     --image="$IMAGE" \
     --platform=managed \
@@ -116,17 +114,12 @@ run_with_progress "Injecting Self-Healing System..." \
 URL=$(gcloud run services describe "$SERVICE_NAME" --platform managed --region "$REGION" --format 'value(status.url)')
 DOMAIN=${URL#https://}
 
-run_with_progress "Finalizing & Warming up..." \
+run_with_progress "System Warm-up..." \
   curl -s -o /dev/null "https://${DOMAIN}"
-
-banner "🎉 FINAL RESULT"
-kv "Status" "Immortal (Probes Active)"
-kv "Domain" "${DOMAIN}"
 
 # =================== 5. Notification ===================
 banner "📨 Step 4 — Notification"
 
-# Link uses the auto-incremented SERVER_NAME
 URI="vless://${GEN_UUID}@vpn.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${GRPC_SERVICE_NAME}&sni=${DOMAIN}#${SERVER_NAME}"
 
 export TZ="Asia/Yangon"
@@ -157,5 +150,18 @@ else
   printf "   ${YELLOW}⚠ Notification skipped.${RESET}\n"
 fi
 
-hr
-printf "${GREEN}${BOLD}✅ OMEGA DEPLOYMENT COMPLETE.${RESET}\n"
+# =================== CEO DASHBOARD ===================
+clear
+echo ""
+echo -e "${YELLOW}╔════════════════════════════════════════════╗${RESET}"
+echo -e "${YELLOW}║          EXECUTIVE SYSTEM REPORT           ║${RESET}"
+echo -e "${YELLOW}╠════════════════════════════════════════════╣${RESET}"
+printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Service Name" "${SERVER_NAME}"
+printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Region" "${REGION}"
+printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Engine" "Gen2 + Boost"
+printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Memory" "4Gi / 4 vCPU"
+printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${GREEN}%-20s${RESET} ${YELLOW}║${RESET}\n" "Status" "Active"
+echo -e "${YELLOW}╚════════════════════════════════════════════╝${RESET}"
+echo ""
+echo -e "${GREEN}${BOLD}   MISSION COMPLETE. SYSTEM ONLINE.${RESET}"
+echo ""
