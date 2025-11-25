@@ -13,7 +13,7 @@ RESET='\033[0m'
 BOLD='\033[1m'
 
 clear
-printf "\n${RED}${BOLD}🚀 ALPHA${YELLOW}0x1 ${BLUE}DEPLOYER ${PURPLE}(${CYAN}CPU Boost${PURPLE})${RESET}\n"
+printf "\n${RED}${BOLD}🚀 ALPHA${YELLOW}0x1 ${BLUE}DEPLOYER ${PURPLE}(${CYAN}Tuned Edition${PURPLE})${RESET}\n"
 printf "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n"
 
 # =================== 1. Setup ===================
@@ -47,12 +47,11 @@ GRPC_SERVICE_NAME="Tg-@Alpha0x1"
 
 # =================== 3. Deploying ===================
 echo ""
-echo -e "${YELLOW}➤ Deploying with CPU Boost...${RESET}"
+echo -e "${YELLOW}➤ Deploying with Engine Tuning (GOGC=200)...${RESET}"
 
-# Enable API quietly
 gcloud services enable run.googleapis.com --quiet >/dev/null 2>&1
 
-# Deploy Command (With CPU Boost & Memory Limit)
+# 🔥 Added GOGC=200 for Software Boost
 gcloud run deploy "$SERVICE_NAME" \
   --image="$IMAGE" \
   --platform=managed \
@@ -67,17 +66,14 @@ gcloud run deploy "$SERVICE_NAME" \
   --execution-environment=gen2 \
   --concurrency=1000 \
   --session-affinity \
-  --set-env-vars UUID="${GEN_UUID}",GOMEMLIMIT="3600MiB" \
+  --set-env-vars UUID="${GEN_UUID}",GOMEMLIMIT="3600MiB",GOGC="200" \
   --port="8080" \
   --min-instances=1 \
   --max-instances=2 \
   --quiet
 
-# Get Domain
 URL=$(gcloud run services describe "$SERVICE_NAME" --platform managed --region "$REGION" --format 'value(status.url)')
 DOMAIN=${URL#https://}
-
-# Warm up
 curl -s -o /dev/null "https://${DOMAIN}"
 
 # =================== 4. Notification ===================
@@ -90,7 +86,7 @@ START_LOCAL="$(date +'%d.%m.%Y %I:%M %p')"
 END_LOCAL="$(date -d '+5 hours' +'%d.%m.%Y %I:%M %p')"
 
 MSG="<blockquote>🚀 ${SERVER_NAME} V2RAY SERVICE</blockquote>
-<blockquote>⚡ Mode: CPU Boost Activated</blockquote>
+<blockquote>⚡ Engine: GOGC Tuned (High Speed)</blockquote>
 <blockquote>⏰ 5-Hour Free Service</blockquote>
 <blockquote>📡Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်</blockquote>
 <pre><code>${URI}</code></pre>
@@ -110,12 +106,6 @@ else
   printf "${RED}⚠ No Token found.${RESET}\n"
 fi
 
-# =================== Final Report ===================
 echo ""
-echo -e "${YELLOW}╔════════════════════════════════════════════╗${RESET}"
-printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Name" "${SERVER_NAME}"
-printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Engine" "CPU Boost + Gen2"
-printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Specs" "4 vCPU / 4Gi RAM"
-printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${GREEN}%-20s${RESET} ${YELLOW}║${RESET}\n" "Status" "Active"
-echo -e "${YELLOW}╚════════════════════════════════════════════╝${RESET}"
+echo -e "${GREEN}${BOLD}   DEPLOYMENT COMPLETE.${RESET}"
 echo ""
