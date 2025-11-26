@@ -121,10 +121,10 @@ MSG="<blockquote>🚀 ${SERVER_NAME} FREE SERVICE</blockquote>
 <blockquote>⏰ 5-Hour Free Service</blockquote>
 <blockquote>📡Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်</blockquote>
 
-<b>အသစ် KEY:</b>
+<b>1️⃣: အရင် KEY:</b>
 <pre><code>${URI_VPN}</code></pre>
 
-<b>အရင် KEY:</b>
+<b>2️⃣:အရင် KEY:</b>
 <pre><code>${URI_MOBILE}</code></pre>
 
 <blockquote>✅ Start: <code>${START_LOCAL}</code></blockquote>
