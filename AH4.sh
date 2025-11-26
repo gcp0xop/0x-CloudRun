@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# =================== UI Colors ===================
+# =================== 1. UI Colors ===================
 RED='\033[1;31m'
 GREEN='\033[1;32m'
 YELLOW='\033[1;33m'
@@ -13,10 +13,10 @@ RESET='\033[0m'
 BOLD='\033[1m'
 
 clear
-printf "\n${RED}${BOLD}🚀 ALPHA${YELLOW}0x1 ${BLUE}DEPLOYER ${PURPLE}(${CYAN}Multi-Path${PURPLE})${RESET}\n"
+printf "\n${RED}${BOLD}🚀 ALPHA${YELLOW}0x1 ${BLUE}INFINITY ${PURPLE}(${CYAN}The Final Boss${PURPLE})${RESET}\n"
 printf "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n"
 
-# =================== 1. Setup ===================
+# =================== 2. Setup ===================
 if [[ -f .env ]]; then source ./.env; fi
 
 if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then 
@@ -29,8 +29,8 @@ if [[ -z "${TELEGRAM_CHAT_IDS:-}" ]]; then
   read -r TELEGRAM_CHAT_IDS
 fi
 
-# =================== 2. Config ===================
-# Auto-Counter
+# =================== 3. Config ===================
+# Auto-Counter Logic
 COUNT_FILE=".alpha_counter"
 if [[ ! -f "$COUNT_FILE" ]]; then echo "0" > "$COUNT_FILE"; fi
 CURRENT_COUNT=$(<"$COUNT_FILE")
@@ -46,13 +46,15 @@ REGION="us-central1"
 IMAGE="a0x1/al0x1"
 GRPC_SERVICE_NAME="Tg-@Alpha0x1"
 
-# =================== 3. Deploying ===================
+# =================== 4. Deploying ===================
 echo ""
-echo -e "${YELLOW}➤ Deploying Server (${SERVER_NAME})...${RESET}"
+echo -e "${YELLOW}➤ Deploying Infinity Node (${SERVER_NAME})...${RESET}"
 
+# Enable API quietly
 gcloud services enable run.googleapis.com --quiet >/dev/null 2>&1
 
-# Deploy (Gold Standard Specs)
+# Deploy Command (THE PERFECT COMBO)
+# 4 vCPU + 4GB + Gen2 + NoThrottle + Multi-Path Tags
 gcloud run deploy "$SERVICE_NAME" \
   --image="$IMAGE" \
   --platform=managed \
@@ -66,7 +68,7 @@ gcloud run deploy "$SERVICE_NAME" \
   --execution-environment=gen2 \
   --concurrency=1000 \
   --session-affinity \
-  --labels="tier=gold,priority=high" \
+  --labels="tier=platinum,mode=infinity" \
   --tag="vip" \
   --set-env-vars UUID="${GEN_UUID}" \
   --port="8080" \
@@ -74,6 +76,7 @@ gcloud run deploy "$SERVICE_NAME" \
   --max-instances=2 \
   --quiet
 
+# Get Domain
 URL=$(gcloud run services describe "$SERVICE_NAME" --platform managed --region "$REGION" --format 'value(status.url)')
 DOMAIN=${URL#https://}
 VIP_DOMAIN="vip---${DOMAIN}"
@@ -81,39 +84,37 @@ VIP_DOMAIN="vip---${DOMAIN}"
 # Warm up
 curl -s -o /dev/null "https://${DOMAIN}"
 
-# =================== 4. Notification (Multi-Link) ===================
-echo -e "${YELLOW}➤ Generating Multi-Path Links...${RESET}"
+# =================== 5. Notification ===================
+echo -e "${YELLOW}➤ Generating Infinity Links...${RESET}"
 
 export TZ="Asia/Yangon"
 START_LOCAL="$(date +'%d.%m.%Y %I:%M %p')"
 END_LOCAL="$(date -d '+5 hours 10 minutes' +'%d.%m.%Y %I:%M %p')"
 
-# 1. Classic (Your Favorite)
+# 1. Classic (Stable)
 URI_CLASSIC="vless://${GEN_UUID}@vpn.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${GRPC_SERVICE_NAME}&sni=${DOMAIN}#${SERVER_NAME}-Classic"
 
-# 2. Download (High Speed)
+# 2. Download (High Speed - VIP Path)
 URI_DL="vless://${GEN_UUID}@dl.google.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${GRPC_SERVICE_NAME}&sni=${VIP_DOMAIN}#${SERVER_NAME}-Speed"
 
-# 3. DNS (Low Latency)
+# 3. DNS (Gaming - VIP Path)
 URI_DNS="vless://${GEN_UUID}@dns.google:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${GRPC_SERVICE_NAME}&sni=${VIP_DOMAIN}#${SERVER_NAME}-Ping"
 
-# 4. API (Alternative)
+# 4. API (Backup)
 URI_API="vless://${GEN_UUID}@www.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${GRPC_SERVICE_NAME}&sni=${DOMAIN}#${SERVER_NAME}-API"
 
-MSG="<blockquote>🚀 ${SERVER_NAME} MULTI-PATH</blockquote>
+MSG="<blockquote>🚀 ${SERVER_NAME} INFINITY</blockquote>
+<blockquote>⚡ 4-Core / 4GB / No-Throttle</blockquote>
 <blockquote>⏰ 5-Hour 10-Min Free Service</blockquote>
-<blockquote>📡Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်</blockquote>
-<b>1️⃣ Classic (Reliable):</b>
-<pre><code>${URI_CLASSIC}</code></pre>
 
-<b>2️⃣ Download (High Speed):</b>
+<b>💎 SPEED LINK (Recommend):</b>
 <pre><code>${URI_DL}</code></pre>
 
-<b>3️⃣ DNS (Low Ping):</b>
-<pre><code>${URI_DNS}</code></pre>
+<b>🛡️ CLASSIC LINK:</b>
+<pre><code>${URI_CLASSIC}</code></pre>
 
-<b>4️⃣ API (Backup):</b>
-<pre><code>${URI_API}</code></pre>
+<b>🎮 GAMING LINK:</b>
+<pre><code>${URI_DNS}</code></pre>
 
 <blockquote>✅ Start: <code>${START_LOCAL}</code></blockquote>
 <blockquote>⏳ End: <code>${END_LOCAL}</code></blockquote>"
@@ -135,7 +136,8 @@ fi
 echo ""
 echo -e "${YELLOW}╔════════════════════════════════════════════╗${RESET}"
 printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Name" "${SERVER_NAME}"
-printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Paths" "Classic, DL, DNS, API"
+printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Config" "Infinity (No-Throttle)"
+printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Links" "4 Paths Generated"
 printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${GREEN}%-20s${RESET} ${YELLOW}║${RESET}\n" "Status" "Active ✅"
 echo -e "${YELLOW}╚════════════════════════════════════════════╝${RESET}"
 echo ""
