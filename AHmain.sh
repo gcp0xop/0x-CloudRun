@@ -12,25 +12,40 @@ WHITE='\033[1;37m'
 RESET='\033[0m'
 BOLD='\033[1m'
 
-clear
-printf "\n${RED}${BOLD}🚀 ALPHA${YELLOW}0x1 ${BLUE}INFINITY ${PURPLE}(${CYAN}The Final Boss${PURPLE})${RESET}\n"
-printf "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n"
+# Header Design
+header() {
+    clear
+    echo -e "${PURPLE}╔════════════════════════════════════════════╗${RESET}"
+    echo -e "${PURPLE}║${RESET}           ${RED}${BOLD}🚀 ALPHA${YELLOW}0x1${RESET} ${BLUE}DEPLOYER${RESET}           ${PURPLE}║${RESET}"
+    echo -e "${PURPLE}╚════════════════════════════════════════════╝${RESET}"
+    echo ""
+}
+
+step() { echo -e "\n${CYAN}${BOLD}✨ $1${RESET}\n${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"; }
+ok() { echo -e "   ${GREEN}✔${RESET} $1"; }
+info() { echo -e "   ${BLUE}➤${RESET} $1"; }
+
+header
 
 # =================== 2. Setup ===================
+step "Step 1: Setup"
+
 if [[ -f .env ]]; then source ./.env; fi
 
 if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then 
-  printf "   ${CYAN}💎 Bot Token:${RESET} "
+  printf "   ${YELLOW}🔑 Bot Token:${RESET} "
   read -r TELEGRAM_TOKEN
 fi
 
 if [[ -z "${TELEGRAM_CHAT_IDS:-}" ]]; then 
-  printf "   ${CYAN}💎 Chat ID:${RESET}   "
+  printf "   ${YELLOW}💬 Chat ID:${RESET}   "
   read -r TELEGRAM_CHAT_IDS
 fi
 
 # =================== 3. Config ===================
-# Auto-Counter Logic
+step "Step 2: Configuration"
+
+# Auto-Counter
 COUNT_FILE=".alpha_counter"
 if [[ ! -f "$COUNT_FILE" ]]; then echo "0" > "$COUNT_FILE"; fi
 CURRENT_COUNT=$(<"$COUNT_FILE")
@@ -46,15 +61,20 @@ REGION="us-central1"
 IMAGE="a0x1/al0x1"
 GRPC_SERVICE_NAME="Tg-@Alpha0x1"
 
+info "${WHITE}Name:${RESET}   ${GREEN}${SERVER_NAME}${RESET}"
+info "${WHITE}Specs:${RESET}  ${GREEN}4 vCPU / 4GB RAM${RESET}"
+info "${WHITE}Paths:${RESET}  ${GREEN}vpn.google & m.google${RESET}"
+
 # =================== 4. Deploying ===================
-echo ""
-echo -e "${YELLOW}➤ Deploying Infinity Node (${SERVER_NAME})...${RESET}"
+step "Step 3: Deploying..."
 
 # Enable API quietly
 gcloud services enable run.googleapis.com --quiet >/dev/null 2>&1
 
-# Deploy Command (THE PERFECT COMBO)
-# 4 vCPU + 4GB + Gen2 + NoThrottle + Multi-Path Tags
+echo -e "${YELLOW}   🚀 Launching High-Performance Node...${RESET}"
+echo "---------------------------------------------------"
+
+# Deploy Command (Max Specs + Safe Mode)
 gcloud run deploy "$SERVICE_NAME" \
   --image="$IMAGE" \
   --platform=managed \
@@ -68,53 +88,44 @@ gcloud run deploy "$SERVICE_NAME" \
   --execution-environment=gen2 \
   --concurrency=1000 \
   --session-affinity \
-  --labels="tier=platinum,mode=infinity" \
-  --tag="vip" \
-  --set-env-vars UUID="${GEN_UUID}" \
+  --set-env-vars UUID="${GEN_UUID}",GOMAXPROCS="4" \
   --port="8080" \
   --min-instances=1 \
   --max-instances=2 \
   --quiet
 
+echo "---------------------------------------------------"
+
 # Get Domain
 URL=$(gcloud run services describe "$SERVICE_NAME" --platform managed --region "$REGION" --format 'value(status.url)')
 DOMAIN=${URL#https://}
-VIP_DOMAIN="vip---${DOMAIN}"
 
 # Warm up
 curl -s -o /dev/null "https://${DOMAIN}"
 
 # =================== 5. Notification ===================
-echo -e "${YELLOW}➤ Generating Infinity Links...${RESET}"
+step "Step 4: Sending Keys"
 
 export TZ="Asia/Yangon"
 START_LOCAL="$(date +'%d.%m.%Y %I:%M %p')"
 END_LOCAL="$(date -d '+5 hours 10 minutes' +'%d.%m.%Y %I:%M %p')"
 
-# 1. Classic (Stable)
-URI_CLASSIC="vless://${GEN_UUID}@vpn.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${GRPC_SERVICE_NAME}&sni=${DOMAIN}#${SERVER_NAME}-Classic"
+# 🔥 Route 1: VPN Domain (Your Favorite)
+URI_VPN="vless://${GEN_UUID}@vpn.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${GRPC_SERVICE_NAME}&sni=${DOMAIN}#${SERVER_NAME}-VPN"
 
-# 2. Download (High Speed - VIP Path)
-URI_DL="vless://${GEN_UUID}@dl.google.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${GRPC_SERVICE_NAME}&sni=${VIP_DOMAIN}#${SERVER_NAME}-Speed"
+# 🔥 Route 2: Mobile Domain (Alternative)
+URI_MOBILE="vless://${GEN_UUID}@m.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${GRPC_SERVICE_NAME}&sni=${DOMAIN}#${SERVER_NAME}-Mobile"
 
-# 3. DNS (Gaming - VIP Path)
-URI_DNS="vless://${GEN_UUID}@dns.google:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${GRPC_SERVICE_NAME}&sni=${VIP_DOMAIN}#${SERVER_NAME}-Ping"
+# Telegram Message
+MSG="<blockquote>🚀 ${SERVER_NAME} FREE SERVICE</blockquote>
+<blockquote>⏰ 5-Hour Free Service</blockquote>
+<blockquote>📡Mytel 4G လိုင်းဖြတ် ဘယ်နေရာမဆိုသုံးလို့ရပါတယ်</blockquote>
 
-# 4. API (Backup)
-URI_API="vless://${GEN_UUID}@www.googleapis.com:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=${GRPC_SERVICE_NAME}&sni=${DOMAIN}#${SERVER_NAME}-API"
+<b>အသစ် KEY:</b>
+<pre><code>${URI_VPN}</code></pre>
 
-MSG="<blockquote>🚀 ${SERVER_NAME} INFINITY</blockquote>
-<blockquote>⚡ 4-Core / 4GB / No-Throttle</blockquote>
-<blockquote>⏰ 5-Hour 10-Min Free Service</blockquote>
-
-<b>💎 SPEED LINK (Recommend):</b>
-<pre><code>${URI_DL}</code></pre>
-
-<b>🛡️ CLASSIC LINK:</b>
-<pre><code>${URI_CLASSIC}</code></pre>
-
-<b>🎮 GAMING LINK:</b>
-<pre><code>${URI_DNS}</code></pre>
+<b>အရင် KEY:</b>
+<pre><code>${URI_MOBILE}</code></pre>
 
 <blockquote>✅ Start: <code>${START_LOCAL}</code></blockquote>
 <blockquote>⏳ End: <code>${END_LOCAL}</code></blockquote>"
@@ -126,18 +137,18 @@ if [[ -n "$TELEGRAM_TOKEN" && -n "$TELEGRAM_CHAT_IDS" ]]; then
       -d "chat_id=${chat_id}" \
       -d "parse_mode=HTML" \
       --data-urlencode "text=${MSG}" > /dev/null
-    echo -e "${GREEN}✔ Sent to ID: ${chat_id}${RESET}"
+    ok "Sent to ID: ${chat_id}"
   done
 else
-  printf "${RED}⚠ No Token found.${RESET}\n"
+  printf "   ${RED}⚠ Notification skipped.${RESET}\n"
 fi
 
-# =================== Final Report ===================
+# =================== 6. Final Report ===================
 echo ""
 echo -e "${YELLOW}╔════════════════════════════════════════════╗${RESET}"
 printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Name" "${SERVER_NAME}"
-printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Config" "Infinity (No-Throttle)"
-printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Links" "4 Paths Generated"
+printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Route 1" "vpn.googleapis.com"
+printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${WHITE}%-20s${RESET} ${YELLOW}║${RESET}\n" "Route 2" "m.googleapis.com"
 printf "${YELLOW}║${RESET} ${CYAN}%-18s${RESET} : ${GREEN}%-20s${RESET} ${YELLOW}║${RESET}\n" "Status" "Active ✅"
 echo -e "${YELLOW}╚════════════════════════════════════════════╝${RESET}"
 echo ""
